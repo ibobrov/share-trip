@@ -10,6 +10,7 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/asaskevich/govalidator/v12 v12.0.0 // indirect
 	github.com/gofiber/fiber/v2 v2.52.15 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

@@ -15,7 +15,7 @@ GOOSE := $(GOBIN)/goose$(EXE)
 
 COMPOSE := docker compose --env-file .env -f deploy/docker-compose.yml
 
-.PHONY: deps tidy fmt lint test build run up down migrate-up migrate-down migrate-status
+.PHONY: deps tidy fmt lint test build run up down migrate-up migrate-down migrate-status migrate-create
 
 deps:
 	go mod download
@@ -54,3 +54,7 @@ migrate-down:
 
 migrate-status:
 	"$(GOOSE)" -env .env -dir migrations status
+
+# Default migration name: name. Override with name=create_table.
+migrate-create:
+	"$(GOOSE)" -dir migrations create "$(if $(strip $(name)),$(strip $(name)),name)" sql

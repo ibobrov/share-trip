@@ -6,10 +6,12 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ibobrov/share_trip/internal/api"
+	"github.com/ibobrov/share_trip/internal/domain"
+	"github.com/ibobrov/share_trip/internal/repository"
+	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/joho/godotenv"
 
 	"github.com/ibobrov/share_trip/internal/config"
-	"github.com/ibobrov/share_trip/internal/repository/postgres"
 )
 
 func main() {
@@ -19,7 +21,7 @@ func main() {
 
 	ctx := context.Background()
 
-	dbConfig := postgres.Config{
+	dbConfig := repository.Config{
 		Host:     config.Env("DB_HOST", "localhost"),
 		Port:     config.EnvInt("DB_PORT", 6543),
 		User:     config.Env("DB_USER", "postgres"),
@@ -28,13 +30,18 @@ func main() {
 		SSLMode:  config.Env("DB_SSLMODE", "disable"),
 	}
 
-	pool, err := postgres.NewPool(ctx, dbConfig.DSN())
+	pool, err := repository.NewPool(ctx, dbConfig.DSN())
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pool.Close()
 
-	server := api.NewServer(pool)
+	tripRepo := repository.NewTripRepository()
+	tripHistoryRepo := repository.NewTripHistoryRepository()
+	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo)
+	tripService := service.NewTripService(pool, tripUseCase)
+	server := api.NewServer(pool, tripService)
+
 	app := fiber.New()
 	server.Route(app)
 	httpPort := config.Env("HTTP_PORT", "8080")
