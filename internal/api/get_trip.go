@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/ibobrov/share_trip/internal/api/dto"
 )
 
 func (s *Server) GetTrip(c *fiber.Ctx) error {
@@ -21,5 +22,5 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 	if err != nil {
 		return HandleError(c, err)
 	}
-	return Success(c, trip)
+	return Success(c, dto.GetTripResponseFromTripDomain(trip))
 }

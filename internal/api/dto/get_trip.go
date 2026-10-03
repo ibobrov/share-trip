@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ibobrov/share_trip/internal/domain"
 )
 
 type GetTripRequest struct {
@@ -19,4 +20,17 @@ type GetTripResponse struct {
 	AvailableSeats int       `json:"available_seats"`
 	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+func GetTripResponseFromTripDomain(t domain.Trip) GetTripResponse {
+	return GetTripResponse{
+		ID:             t.ID,
+		ClientID:       t.ClientID,
+		FromPoint:      t.FromPoint,
+		ToPoint:        t.ToPoint,
+		DepartureTime:  t.DepartureTime,
+		AvailableSeats: t.Seats,
+		Status:         string(t.Status),
+		CreatedAt:      t.CreatedAt,
+	}
 }

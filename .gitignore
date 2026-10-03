@@ -1,4 +1,5 @@
 .idea
+.reports
 .tools
 .env
 bin
