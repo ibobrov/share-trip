@@ -25,3 +25,16 @@ type Trip struct {
 	Status        TripStatus
 	CreatedAt     time.Time
 }
+
+type NewTrip struct {
+	ClientID      uuid.UUID
+	FromPoint     string
+	ToPoint       string
+	DepartureTime time.Time
+	Seats         int
+}
+
+type PublishTripRequest struct {
+	TripID   uuid.UUID
+	ClientID uuid.UUID
+}

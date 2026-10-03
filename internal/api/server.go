@@ -1,6 +1,12 @@
 package api
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/asaskevich/govalidator/v12"
+	"github.com/gofiber/fiber/v2"
+	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -15,4 +21,48 @@ func NewServer(db *pgxpool.Pool, tripService *service.TripService) *Server {
 		DB:          db,
 		tripService: tripService,
 	}
+}
+
+func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx) (ok bool, err error) {
+	if err := c.BodyParser(request); err != nil {
+		return false, Failure(c, "некорректное тело запроса")
+	}
+
+	if _, err := govalidator.ValidateStruct(*request); err != nil {
+		validationErrors := make([]string, 0)
+
+		for field, message := range govalidator.ErrorsByField(err) {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("field of request `%s` contains error `%s`", field, message),
+			)
+		}
+
+		// На случай ошибки, которую нельзя привязать к полю.
+		if len(validationErrors) == 0 {
+			validationErrors = append(validationErrors, err.Error())
+		}
+
+		return false, Failure(c, validationErrors...)
+	}
+
+	return true, nil
+}
+
+func HandleError(c *fiber.Ctx, err error) error {
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrDomain):
+			return Failure(c, err.Error())
+
+		case errors.Is(err, domain.ErrNotFound):
+			return Failure(c, err.Error())
+
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+	}
+
+	return nil
 }

@@ -14,7 +14,7 @@ func NewTripHistoryRepository() *TripHistoryRepository {
 	return &TripHistoryRepository{}
 }
 
-func (r *TripHistoryRepository) Create(
+func (r *TripHistoryRepository) CreateTripHistory(
 	ctx context.Context,
 	tx pgx.Tx,
 	trip entity.TripHistory,

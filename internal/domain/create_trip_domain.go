@@ -16,10 +16,10 @@ func (u *TripUseCase) CreateTrip(
 	newTrip NewTrip,
 ) (*Trip, error) {
 	if newTrip.DepartureTime.Before(time.Now()) {
-		return &Trip{}, IncorrectTripDepartureTime
+		return &Trip{}, fmt.Errorf("%w: недопустимое время начало поездки", ErrDomain)
 	}
 	if newTrip.Seats <= 0 {
-		return &Trip{}, IncorrectTripSeats
+		return &Trip{}, fmt.Errorf("%w: недопустимое кол-во слотов в поездке", ErrDomain)
 	}
 
 	tripEntity := entity.Trip{
@@ -33,11 +33,11 @@ func (u *TripUseCase) CreateTrip(
 		CreatedAt:     time.Now().UTC(),
 	}
 
-	if err := u.tripRepo.Create(ctx, tx, tripEntity); err != nil {
+	if err := u.tripRepo.CreateTrip(ctx, tx, tripEntity); err != nil {
 		return nil, fmt.Errorf("create trip: %w", err)
 	}
 
-	if err := u.tripHistoryRepo.Create(ctx, tx, entity.TripHistory{
+	if err := u.tripHistoryRepo.CreateTripHistory(ctx, tx, entity.TripHistory{
 		ID:         uuid.New(),
 		TripID:     tripEntity.ID,
 		FromStatus: nil,

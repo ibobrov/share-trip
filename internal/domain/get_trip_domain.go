@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -16,6 +17,10 @@ func (u *TripUseCase) GetTrip(
 	tripEntity, err := u.tripRepo.GetByID(ctx, tx, id)
 
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+
 		return nil, fmt.Errorf("get trip: %w", err)
 	}
 

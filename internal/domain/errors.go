@@ -2,5 +2,7 @@ package domain
 
 import "errors"
 
-var IncorrectTripDepartureTime = errors.New("недопустимое время начало поездки")
-var IncorrectTripSeats = errors.New("недопустимое кол-во слотов в поездке")
+var (
+	ErrDomain   = errors.New("domain error")
+	ErrNotFound = errors.New("not found entity")
+)
