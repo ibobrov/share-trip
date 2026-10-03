@@ -38,7 +38,8 @@ func main() {
 
 	tripRepo := repository.NewTripRepository()
 	tripHistoryRepo := repository.NewTripHistoryRepository()
-	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo)
+	outboxRepo := repository.NewOutboxRepository()
+	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
 	tripService := service.NewTripService(pool, tripUseCase)
 	server := api.NewServer(pool, tripService)
 

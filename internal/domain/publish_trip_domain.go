@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -17,7 +18,6 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 	req PublishTripRequest,
 ) (*uuid.UUID, error) {
 	trip, err := u.tripRepo.GetForUpdateByID(ctx, tx, req.TripID)
-
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: trip %s", ErrNotFound, req.TripID)
@@ -30,6 +30,7 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 		return nil, fmt.Errorf("%w: forbidden: client %s is not driver of trip %s", ErrDomain, req.ClientID, req.TripID)
 	}
 
+	// Повторный запрос успешен, но новых истории и события не создаёт.
 	if trip.Status == string(TripStatusPublished) {
 		return &trip.ID, nil
 	}
@@ -39,10 +40,17 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 	}
 
 	trip.Status = string(TripStatusPublished)
+	createdAt := time.Now().UTC()
 
 	ok, err := u.tripRepo.UpdateTrip(ctx, tx, trip)
+	if err != nil {
+		return nil, fmt.Errorf("update trip: %w", err)
+	}
 	if !ok {
-		return nil, err
+		return nil, fmt.Errorf(
+			"update trip: no row updated for trip %s",
+			trip.ID,
+		)
 	}
 
 	fromStatus := string(TripStatusDraft)
@@ -52,10 +60,28 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 		TripID:     trip.ID,
 		FromStatus: &fromStatus,
 		ToStatus:   string(TripStatusPublished),
-		CreatedAt:  time.Now(),
+		CreatedAt:  createdAt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("CreateTripHistory: %w", err)
+	}
+
+	tripPublishEventPayload, err := json.Marshal(entity.PublishTripPayload{
+		TripID: trip.ID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal trip published payload: %w", err)
+	}
+
+	err = u.outboxRepo.Create(ctx, tx, entity.OutboxEvent{
+		ID:          uuid.New(),
+		EventName:   "trip_published",
+		AggregateID: trip.ID,
+		Payload:     tripPublishEventPayload,
+		CreatedAt:   createdAt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create trip published event: %w", err)
 	}
 
 	return &trip.ID, nil
