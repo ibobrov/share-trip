@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/api/dto"
 	"github.com/ibobrov/share_trip/internal/domain"
@@ -19,6 +20,7 @@ type getTripTestResponse struct {
 
 func sendGetTripRequest(
 	t *testing.T,
+	expectedStatus int,
 	tripID string,
 ) getTripTestResponse {
 	t.Helper()
@@ -28,7 +30,7 @@ func sendGetTripRequest(
 		http.MethodGet,
 		tripTestURL+tripID,
 		nil,
-		http.StatusOK,
+		expectedStatus,
 	)
 }
 
@@ -43,7 +45,7 @@ func TestServer_GetTrip(t *testing.T) {
 			Add(time.Hour).
 			Truncate(time.Second)
 
-		created := sendCreateTripRequest(t, dto.CreateTripRequest{
+		created := sendCreateTripRequest(t, fiber.StatusOK, dto.CreateTripRequest{
 			ClientID:       clientID.String(),
 			FromPoint:      "Москва",
 			ToPoint:        "Коломна",
@@ -54,7 +56,7 @@ func TestServer_GetTrip(t *testing.T) {
 		require.Empty(t, created.Errors)
 		require.NotNil(t, created.Data)
 
-		response := sendGetTripRequest(t, created.Data.ID.String())
+		response := sendGetTripRequest(t, fiber.StatusOK, created.Data.ID.String())
 
 		require.Empty(t, response.Errors)
 		require.NotNil(t, response.Data)
@@ -87,7 +89,7 @@ func TestServer_GetTrip(t *testing.T) {
 
 	t.Run("несуществующая поездка", func(t *testing.T) {
 		t.Parallel()
-		response := sendGetTripRequest(t, uuid.NewString())
+		response := sendGetTripRequest(t, fiber.StatusNotFound, uuid.NewString())
 
 		require.Nil(t, response.Data)
 		require.NotEmpty(t, response.Errors)
@@ -122,7 +124,7 @@ func TestServer_GetTrip_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			response := sendGetTripRequest(t, tt.id)
+			response := sendGetTripRequest(t, fiber.StatusOK, tt.id)
 
 			require.Nil(t, response.Data)
 			require.Equal(

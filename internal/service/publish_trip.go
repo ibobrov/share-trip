@@ -22,6 +22,10 @@ func (s *TripService) PublishTrip(
 	)
 
 	if err != nil {
+		if errors.Is(err, domain.ErrSkipOperation) {
+			return tripDomain.TripID, err
+		}
+
 		return uuid.Nil, err
 	}
 

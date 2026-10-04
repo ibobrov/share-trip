@@ -17,8 +17,22 @@ func Success(c *fiber.Ctx, data any) error {
 	})
 }
 
+func SuccessWithHttpStatus(c *fiber.Ctx, statusCode int, data any) error {
+	return c.Status(statusCode).JSON(Response{
+		Data:   data,
+		Errors: []string{},
+	})
+}
+
 func Failure(c *fiber.Ctx, errs ...string) error {
 	return c.Status(fiber.StatusOK).JSON(Response{
+		Data:   nil,
+		Errors: errs,
+	})
+}
+
+func FailureWithHttpStatus(c *fiber.Ctx, statusCode int, errs ...string) error {
+	return c.Status(statusCode).JSON(Response{
 		Data:   nil,
 		Errors: errs,
 	})

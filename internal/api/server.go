@@ -51,16 +51,23 @@ func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx) (ok bool, 
 func HandleError(c *fiber.Ctx, err error) error {
 	if err != nil {
 		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return FailureWithHttpStatus(c, fiber.StatusNotFound, err.Error())
+
+		case errors.Is(err, domain.ErrForbidden):
+			return FailureWithHttpStatus(c, fiber.StatusForbidden, err.Error())
+
+		case errors.Is(err, domain.ErrConflict):
+			return FailureWithHttpStatus(c, fiber.StatusConflict, err.Error())
+
+		case errors.Is(err, domain.ErrSkipOperation):
+			return FailureWithHttpStatus(c, fiber.StatusNoContent, err.Error())
+
 		case errors.Is(err, domain.ErrDomain):
 			return Failure(c, err.Error())
 
-		case errors.Is(err, domain.ErrNotFound):
-			return Failure(c, err.Error())
-
 		default:
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return FailureWithHttpStatus(c, fiber.StatusInternalServerError, err.Error())
 		}
 	}
 
