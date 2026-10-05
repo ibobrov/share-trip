@@ -3,9 +3,11 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -15,6 +17,13 @@ func (u *TripUseCase) CreateTrip(
 	tx pgx.Tx,
 	newTrip NewTrip,
 ) (*Trip, error) {
+	logger := logctx.Logger(ctx).With(
+		slog.String("layer", "usecase"),
+		slog.String("usecase", "TripUsecase.CreateTrip"),
+		slog.String("client_id", newTrip.ClientID.String()),
+	)
+	logger.Info("create trip usecase started")
+
 	if newTrip.DepartureTime.Before(time.Now()) {
 		return &Trip{}, fmt.Errorf("%w: недопустимое время начало поездки", ErrDomain)
 	}
@@ -34,7 +43,11 @@ func (u *TripUseCase) CreateTrip(
 	}
 
 	if err := u.tripRepo.CreateTrip(ctx, tx, tripEntity); err != nil {
-		return nil, fmt.Errorf("create trip: %w", err)
+		logger.Error(
+			"repository create trip failed",
+			slog.Any("error", err),
+		)
+		return nil, fmt.Errorf("tripRepo.CreateTrip: %w", err)
 	}
 
 	if err := u.tripHistoryRepo.CreateTripHistory(ctx, tx, entity.TripHistory{
@@ -44,8 +57,17 @@ func (u *TripUseCase) CreateTrip(
 		ToStatus:   tripEntity.Status,
 		CreatedAt:  tripEntity.CreatedAt,
 	}); err != nil {
-		return nil, fmt.Errorf("create trip history: %w", err)
+		logger.Error(
+			"repository create trip history failed",
+			slog.Any("error", err),
+		)
+		return nil, fmt.Errorf("tripHistoryRepo.CreateTripHistory: %w", err)
 	}
+
+	logger.Info(
+		"create trip usecase completed",
+		slog.String("trip_id", tripEntity.ID.String()),
+	)
 
 	return &Trip{
 		ID:            tripEntity.ID,

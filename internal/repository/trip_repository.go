@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -20,6 +22,15 @@ func (r *TripRepository) CreateTrip(
 	tx pgx.Tx,
 	trip entity.Trip,
 ) error {
+	logger := logctx.Logger(ctx).With(
+		slog.String("layer", "repository"),
+		slog.String("repository", "TripRepository"),
+		slog.String("operation", "Create"),
+		slog.String("trip_id", trip.ID.String()),
+		slog.String("client_id", trip.ClientID.String()),
+	)
+	logger.Info("insert trip started")
+
 	_, err := tx.Exec(ctx,
 		`
 			INSERT INTO trips (id, client_id, from_point, to_point, departure_time, seats, status, created_at)
@@ -34,9 +45,14 @@ func (r *TripRepository) CreateTrip(
 		trip.Status,
 		trip.CreatedAt)
 	if err != nil {
+		logger.Error(
+			"insert trip failed",
+			slog.Any("error", err),
+		)
 		return fmt.Errorf("insert trips: %w", err)
 	}
 
+	logger.Info("insert trip completed")
 	return err
 }
 

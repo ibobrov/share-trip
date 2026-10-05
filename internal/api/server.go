@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/asaskevich/govalidator/v12"
 	"github.com/gofiber/fiber/v2"
@@ -23,8 +24,13 @@ func NewServer(db *pgxpool.Pool, tripService *service.TripService) *Server {
 	}
 }
 
-func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx) (ok bool, err error) {
+func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx, logger *slog.Logger) (ok bool, err error) {
 	if err := c.BodyParser(request); err != nil {
+		logger.Warn(
+			"create trip failed: invalid json body",
+			slog.Any("error", err),
+			slog.String("layer", "validation"),
+		)
 		return false, Failure(c, "некорректное тело запроса")
 	}
 
@@ -41,6 +47,12 @@ func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx) (ok bool, 
 		if len(validationErrors) == 0 {
 			validationErrors = append(validationErrors, err.Error())
 		}
+
+		logger.Warn(
+			"create trip failed:",
+			slog.Any("error", validationErrors),
+			slog.String("layer", "validation"),
+		)
 
 		return false, Failure(c, validationErrors...)
 	}
