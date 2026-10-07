@@ -17,7 +17,7 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 	tx pgx.Tx,
 	req PublishTripRequest,
 ) (*uuid.UUID, error) {
-	trip, err := u.tripRepo.GetForUpdateByID(ctx, tx, req.TripID)
+	trip, err := u.tripRepo.GetTripForUpdateByID(ctx, tx, req.TripID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: trip %s", ErrNotFound, req.TripID)

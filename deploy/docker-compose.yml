@@ -10,6 +10,12 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     restart: unless-stopped
 
   loki:
@@ -47,7 +53,56 @@ services:
     depends_on:
       - loki
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "19090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  postgres_exporter_init:
+    image: postgres:16
+    container_name: pg_exporter_init
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_EXPORTER_PASSWORD: "${POSTGRES_EXPORTER_PASSWORD:?Set POSTGRES_EXPORTER_PASSWORD in .env}"
+    volumes:
+      - ./postgres/init-exporter.sql:/scripts/init-exporter.sql:ro
+    command:
+      - psql
+      - --no-psqlrc
+      - --set=ON_ERROR_STOP=1
+      - --file=/scripts/init-exporter.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: pg_exporter
+    environment:
+      DATA_SOURCE_URI: "postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      DATA_SOURCE_USER: postgres_exporter
+      DATA_SOURCE_PASS: "${POSTGRES_EXPORTER_PASSWORD:?Set POSTGRES_EXPORTER_PASSWORD in .env}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres_exporter_init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   pgdata:
   loki_data:
   grafana_data:
+  prometheus_data:

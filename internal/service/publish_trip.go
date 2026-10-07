@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/domain"
@@ -13,6 +14,15 @@ func (s *TripService) PublishTrip(
 	ctx context.Context,
 	tripDomain domain.PublishTripRequest,
 ) (uuid.UUID, error) {
+	started := time.Now()
+	metricRsl := "success"
+
+	defer func() {
+		s.metrics.TripPublishTotal.WithLabelValues(metricRsl).Inc()
+		s.metrics.TripPublishDuration.WithLabelValues(metricRsl).
+			Observe(time.Since(started).Seconds())
+	}()
+
 	result, err := tx(
 		ctx,
 		s.pool,
@@ -22,8 +32,14 @@ func (s *TripService) PublishTrip(
 	)
 
 	if err != nil {
-		if errors.Is(err, domain.ErrSkipOperation) {
+		switch {
+		case errors.Is(err, domain.ErrSkipOperation):
+			metricRsl = "already_published"
 			return tripDomain.TripID, err
+		case errors.Is(err, domain.ErrConflict) || errors.Is(err, domain.ErrForbidden):
+			metricRsl = "conflict"
+		default:
+			metricRsl = "internal_error"
 		}
 
 		return uuid.Nil, err

@@ -14,7 +14,7 @@ func (u *TripUseCase) GetTrip(
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (*Trip, error) {
-	tripEntity, err := u.tripRepo.GetByID(ctx, tx, id)
+	tripEntity, err := u.tripRepo.GetTripByID(ctx, tx, id)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

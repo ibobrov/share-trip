@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
@@ -23,10 +25,25 @@ func (s *TripService) CreateTrip(
 
 	logger.Info("create trip started")
 
+	started := time.Now()
+	metricRsl := "success"
+
+	defer func() {
+		s.metrics.TripCreateTotal.WithLabelValues(metricRsl).Inc()
+		s.metrics.TripCreateDuration.WithLabelValues(metricRsl).
+			Observe(time.Since(started).Seconds())
+	}()
+
 	result, err := tx(ctx, s.pool, func(tx pgx.Tx) (*domain.Trip, error) {
 		trip, err := s.tripUseCase.CreateTrip(ctx, tx, newTrip)
 
 		if err != nil {
+			if errors.Is(err, domain.ErrDomain) {
+				metricRsl = "validation_error"
+			} else {
+				metricRsl = "internal_error"
+			}
+
 			logger.Error(
 				"create trip usecase failed",
 				slog.String("layer", "transaction"),

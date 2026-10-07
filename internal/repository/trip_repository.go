@@ -4,17 +4,23 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
+	"github.com/ibobrov/share_trip/internal/observability/metrics"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
 )
 
-type TripRepository struct{}
+type TripRepository struct {
+	metrics *metrics.Metrics
+}
 
-func NewTripRepository() *TripRepository {
-	return &TripRepository{}
+func NewTripRepository(metrics *metrics.Metrics) *TripRepository {
+	return &TripRepository{
+		metrics: metrics,
+	}
 }
 
 func (r *TripRepository) CreateTrip(
@@ -22,6 +28,21 @@ func (r *TripRepository) CreateTrip(
 	tx pgx.Tx,
 	trip entity.Trip,
 ) error {
+	started := time.Now()
+	metricRsl := "success"
+
+	defer func() {
+		r.metrics.RepositoryQueryTotal.WithLabelValues(
+			"trip_create",
+			metricRsl,
+		).Inc()
+
+		r.metrics.RepositoryQueryDuration.WithLabelValues(
+			"trip_create",
+			metricRsl,
+		).Observe(time.Since(started).Seconds())
+	}()
+
 	logger := logctx.Logger(ctx).With(
 		slog.String("layer", "repository"),
 		slog.String("repository", "TripRepository"),
@@ -61,6 +82,21 @@ func (r *TripRepository) UpdateTrip(
 	tx pgx.Tx,
 	trip entity.Trip,
 ) (ok bool, err error) {
+	started := time.Now()
+	metricRsl := "success"
+
+	defer func() {
+		r.metrics.RepositoryQueryTotal.WithLabelValues(
+			"update_create",
+			metricRsl,
+		).Inc()
+
+		r.metrics.RepositoryQueryDuration.WithLabelValues(
+			"update_create",
+			metricRsl,
+		).Observe(time.Since(started).Seconds())
+	}()
+
 	result, err := tx.Exec(ctx,
 		`
 			UPDATE trips
@@ -80,11 +116,26 @@ func (r *TripRepository) UpdateTrip(
 	return true, nil
 }
 
-func (r *TripRepository) GetByID(
+func (r *TripRepository) GetTripByID(
 	ctx context.Context,
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (entity.Trip, error) {
+	started := time.Now()
+	metricRsl := "success"
+
+	defer func() {
+		r.metrics.RepositoryQueryTotal.WithLabelValues(
+			"get_trip_by_id",
+			metricRsl,
+		).Inc()
+
+		r.metrics.RepositoryQueryDuration.WithLabelValues(
+			"get_trip_by_id",
+			metricRsl,
+		).Observe(time.Since(started).Seconds())
+	}()
+
 	var trip entity.Trip
 
 	err := tx.QueryRow(
@@ -112,11 +163,26 @@ func (r *TripRepository) GetByID(
 	return trip, nil
 }
 
-func (r *TripRepository) GetForUpdateByID(
+func (r *TripRepository) GetTripForUpdateByID(
 	ctx context.Context,
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (entity.Trip, error) {
+	started := time.Now()
+	metricRsl := "success"
+
+	defer func() {
+		r.metrics.RepositoryQueryTotal.WithLabelValues(
+			"get_trip_for_update_by_id",
+			metricRsl,
+		).Inc()
+
+		r.metrics.RepositoryQueryDuration.WithLabelValues(
+			"get_trip_for_update_by_id",
+			metricRsl,
+		).Observe(time.Since(started).Seconds())
+	}()
+
 	var trip entity.Trip
 	err := tx.QueryRow(ctx, `
 		SELECT

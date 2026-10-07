@@ -9,10 +9,12 @@ import (
 	"github.com/ibobrov/share_trip/internal/api"
 	"github.com/ibobrov/share_trip/internal/app"
 	"github.com/ibobrov/share_trip/internal/domain"
+	"github.com/ibobrov/share_trip/internal/observability/metrics"
 	"github.com/ibobrov/share_trip/internal/observability/middleware"
 	"github.com/ibobrov/share_trip/internal/repository"
 	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ibobrov/share_trip/internal/config"
 )
@@ -39,14 +41,19 @@ func main() {
 	}
 	defer pool.Close()
 
-	tripRepo := repository.NewTripRepository()
+	registry := prometheus.NewRegistry()
+	tripMetrics := metrics.New(registry)
+
+	tripRepo := repository.NewTripRepository(tripMetrics)
 	tripHistoryRepo := repository.NewTripHistoryRepository()
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
-	tripService := service.NewTripService(pool, tripUseCase)
-	server := api.NewServer(pool, tripService)
+	tripService := service.NewTripService(pool, tripUseCase, tripMetrics)
+	server := api.NewServer(pool, tripService, registry)
 
-	application := fiber.New()
+	application := fiber.New(fiber.Config{
+		EnablePrintRoutes: true,
+	})
 
 	logger, logFile, err := app.NewLogger()
 	if err != nil {
@@ -59,6 +66,7 @@ func main() {
 		}
 	}(logFile)
 	application.Use(middleware.Correlation(logger))
+	application.Use(api.NewHTTPMetricsMiddleware(tripMetrics))
 
 	server.Route(application.Group(""))
 	httpPort := config.Env("HTTP_PORT", "8080")

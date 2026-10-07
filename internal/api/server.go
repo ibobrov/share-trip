@@ -10,17 +10,24 @@ import (
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Server struct {
 	DB          *pgxpool.Pool
 	tripService *service.TripService
+	registry    *prometheus.Registry
 }
 
-func NewServer(db *pgxpool.Pool, tripService *service.TripService) *Server {
+func NewServer(
+	db *pgxpool.Pool,
+	tripService *service.TripService,
+	registry *prometheus.Registry,
+) *Server {
 	return &Server{
 		DB:          db,
 		tripService: tripService,
+		registry:    registry,
 	}
 }
 
