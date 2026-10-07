@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 )
 
 func (u *TripUseCase) GetTrip(
@@ -14,6 +15,11 @@ func (u *TripUseCase) GetTrip(
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (*Trip, error) {
+	tracer := otel.Tracer("TripUsecase")
+
+	ctx, span := tracer.Start(ctx, "TripUsecase.GetTrip")
+	defer span.End()
+
 	tripEntity, err := u.tripRepo.GetTripByID(ctx, tx, id)
 
 	if err != nil {

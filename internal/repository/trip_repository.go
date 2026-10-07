@@ -11,6 +11,7 @@ import (
 	"github.com/ibobrov/share_trip/internal/observability/metrics"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 )
 
 type TripRepository struct {
@@ -82,6 +83,11 @@ func (r *TripRepository) UpdateTrip(
 	tx pgx.Tx,
 	trip entity.Trip,
 ) (ok bool, err error) {
+	tracer := otel.Tracer("TripRepository")
+
+	ctx, span := tracer.Start(ctx, "TripRepository.UpdateTrip")
+	defer span.End()
+
 	started := time.Now()
 	metricRsl := "success"
 
@@ -121,6 +127,11 @@ func (r *TripRepository) GetTripByID(
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (entity.Trip, error) {
+	tracer := otel.Tracer("TripRepository")
+
+	ctx, span := tracer.Start(ctx, "TripRepository.GetByID")
+	defer span.End()
+
 	started := time.Now()
 	metricRsl := "success"
 
@@ -168,6 +179,11 @@ func (r *TripRepository) GetTripForUpdateByID(
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (entity.Trip, error) {
+	tracer := otel.Tracer("TripRepository")
+
+	ctx, span := tracer.Start(ctx, "TripRepository.GetTripForUpdateByID")
+	defer span.End()
+
 	started := time.Now()
 	metricRsl := "success"
 

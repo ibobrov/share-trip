@@ -10,10 +10,17 @@ import (
 	"github.com/ibobrov/share_trip/internal/api/dto"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func (s *Server) PublishTrip(c *fiber.Ctx) error {
-	ctx := c.UserContext()
+	tracer := otel.Tracer("trip-api")
+
+	ctx, span := tracer.Start(c.UserContext(), "PublishTripHandler")
+	defer span.End()
+
+	c.Set("trace-id", span.SpanContext().TraceID().String())
 
 	logger := logctx.Logger(ctx).With(
 		slog.String("server", "TripServer"),
@@ -25,6 +32,11 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 	if !ok {
 		return err
 	}
+
+	span.SetAttributes(
+		attribute.String("trip_id", request.TripID),
+		attribute.String("client_id", request.ClientID),
+	)
 
 	logger = logger.With(
 		slog.String("client_id", request.ClientID),

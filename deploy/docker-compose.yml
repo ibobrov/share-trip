@@ -1,3 +1,5 @@
+name: share-trip
+
 services:
   postgres:
     image: postgres:16
@@ -100,6 +102,28 @@ services:
       postgres_exporter_init:
         condition: service_completed_successfully
     restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    container_name: jaeger
+    ports:
+      - "26686:16686" # UI
+      - "14317:4317"   # OTLP gRPC
+      - "14318:4318"   # OTLP HTTP
+      - "24269:14269" # admin / metrics
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: otel_collector
+    command: [ "--config=/etc/otelcol/config.yaml" ]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "14319:4318"
+    depends_on:
+      - jaeger
 
 volumes:
   pgdata:

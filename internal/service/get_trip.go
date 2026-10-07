@@ -6,12 +6,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 )
 
 func (s *TripService) GetTripById(
 	ctx context.Context,
 	id uuid.UUID,
 ) (domain.Trip, error) {
+	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.GetTrip")
+	defer span.End()
+
 	result, err := tx(
 		ctx,
 		s.pool,

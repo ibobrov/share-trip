@@ -8,12 +8,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 )
 
 func (s *TripService) PublishTrip(
 	ctx context.Context,
 	tripDomain domain.PublishTripRequest,
 ) (uuid.UUID, error) {
+	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.PublishTrip")
+	defer span.End()
+
 	started := time.Now()
 	metricRsl := "success"
 

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 )
 
 func (u *TripUseCase) MoveTripDraftToPublish(
@@ -17,6 +18,11 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 	tx pgx.Tx,
 	req PublishTripRequest,
 ) (*uuid.UUID, error) {
+	tracer := otel.Tracer("TripUsecase")
+
+	ctx, span := tracer.Start(ctx, "TripUsecase.PublishTrip")
+	defer span.End()
+
 	trip, err := u.tripRepo.GetTripForUpdateByID(ctx, tx, req.TripID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
