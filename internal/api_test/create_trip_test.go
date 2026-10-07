@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/api/dto"
 	"github.com/ibobrov/share_trip/internal/domain"
@@ -20,6 +21,7 @@ type createTripTestResponse struct {
 
 func sendCreateTripRequest(
 	t *testing.T,
+	expectedStatus int,
 	payload dto.CreateTripRequest,
 ) createTripTestResponse {
 	t.Helper()
@@ -29,7 +31,7 @@ func sendCreateTripRequest(
 		http.MethodPost,
 		tripTestURL+"create",
 		payload,
-		http.StatusOK,
+		expectedStatus,
 	)
 }
 
@@ -45,7 +47,7 @@ func TestServer_CreateTrip(t *testing.T) {
 			Truncate(time.Second)
 		availableSeats := 1
 
-		response := sendCreateTripRequest(t, dto.CreateTripRequest{
+		response := sendCreateTripRequest(t, fiber.StatusOK, dto.CreateTripRequest{
 			ClientID:       clientID.String(),
 			FromPoint:      fromPoint,
 			ToPoint:        toPoint,
@@ -266,7 +268,7 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 			// Поэтому хотя бы одна уникальная метка сохраняется.
 			tt.change(&payload)
 
-			response := sendCreateTripRequest(t, payload)
+			response := sendCreateTripRequest(t, fiber.StatusOK, payload)
 
 			require.NotEmpty(t, response.Errors)
 			require.Nil(t, response.Data)

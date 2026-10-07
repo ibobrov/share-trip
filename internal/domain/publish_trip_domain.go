@@ -27,16 +27,16 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 	}
 
 	if trip.ClientID != req.ClientID {
-		return nil, fmt.Errorf("%w: forbidden: client %s is not driver of trip %s", ErrDomain, req.ClientID, req.TripID)
+		return nil, fmt.Errorf("%w: client %s is not driver of trip %s", ErrForbidden, req.ClientID, req.TripID)
 	}
 
 	// Повторный запрос успешен, но новых истории и события не создаёт.
 	if trip.Status == string(TripStatusPublished) {
-		return &trip.ID, nil
+		return &trip.ID, ErrSkipOperation
 	}
 
 	if trip.Status != string(TripStatusDraft) {
-		return nil, fmt.Errorf("%w: invalid trip status: expected %s, got %s", ErrDomain, TripStatusDraft, trip.Status)
+		return nil, fmt.Errorf("%w: invalid trip status: expected %s, got %s", ErrConflict, TripStatusDraft, trip.Status)
 	}
 
 	trip.Status = string(TripStatusPublished)
@@ -53,12 +53,10 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 		)
 	}
 
-	fromStatus := string(TripStatusDraft)
-
 	err = u.tripHistoryRepo.CreateTripHistory(ctx, tx, entity.TripHistory{
 		ID:         uuid.New(),
 		TripID:     trip.ID,
-		FromStatus: &fromStatus,
+		FromStatus: new(string(TripStatusDraft)),
 		ToStatus:   string(TripStatusPublished),
 		CreatedAt:  createdAt,
 	})

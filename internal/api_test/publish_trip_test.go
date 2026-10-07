@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/api/dto"
 	"github.com/ibobrov/share_trip/internal/domain"
@@ -27,6 +28,7 @@ type publishTripDBState struct {
 
 func sendPublishTripRequest(
 	t *testing.T,
+	expectedStatus int,
 	payload dto.PublishTripRequest,
 ) publishTripTestResponse {
 	t.Helper()
@@ -36,14 +38,14 @@ func sendPublishTripRequest(
 		http.MethodPost,
 		tripTestURL+"publish",
 		payload,
-		http.StatusOK,
+		expectedStatus,
 	)
 }
 
 func createDraftForPublishTest(t *testing.T) *dto.CreateTripResponse {
 	t.Helper()
 
-	response := sendCreateTripRequest(t, dto.CreateTripRequest{
+	response := sendCreateTripRequest(t, fiber.StatusOK, dto.CreateTripRequest{
 		ClientID:       uuid.NewString(),
 		FromPoint:      "Москва",
 		ToPoint:        "Коломна",
@@ -126,7 +128,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		trip := createDraftForPublishTest(t)
 		before := readPublishTripState(t, trip.ID)
 
-		response := sendPublishTripRequest(t, dto.PublishTripRequest{
+		response := sendPublishTripRequest(t, fiber.StatusCreated, dto.PublishTripRequest{
 			TripID:   trip.ID.String(),
 			ClientID: trip.ClientID.String(),
 		})
@@ -225,7 +227,7 @@ func TestServer_PublishTrip(t *testing.T) {
 			ClientID: trip.ClientID.String(),
 		}
 
-		first := sendPublishTripRequest(t, request)
+		first := sendPublishTripRequest(t, fiber.StatusCreated, request)
 		require.Empty(t, first.Errors)
 		require.NotNil(t, first.Data)
 		require.Equal(t, trip.ID, first.Data.TripID)
@@ -233,7 +235,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		before := readPublishTripState(t, trip.ID)
 		require.Equal(t, string(domain.TripStatusPublished), before.Status)
 
-		second := sendPublishTripRequest(t, request)
+		second := sendPublishTripRequest(t, fiber.StatusOK, request)
 		require.Empty(t, second.Errors)
 		require.NotNil(t, second.Data)
 		require.Equal(t, trip.ID, second.Data.TripID)
@@ -246,7 +248,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		t.Parallel()
 		tripID := uuid.New()
 
-		response := sendPublishTripRequest(t, dto.PublishTripRequest{
+		response := sendPublishTripRequest(t, fiber.StatusNotFound, dto.PublishTripRequest{
 			TripID:   tripID.String(),
 			ClientID: uuid.NewString(),
 		})
@@ -284,28 +286,33 @@ func TestServer_PublishTrip_DomainErrors(t *testing.T) {
 		status        domain.TripStatus
 		anotherClient bool
 		errorContains string
+		httpStatus    int
 	}{
 		{
 			name:          "чужой клиент не может опубликовать черновик",
 			status:        domain.TripStatusDraft,
 			anotherClient: true,
 			errorContains: "forbidden",
+			httpStatus:    http.StatusForbidden,
 		},
 		{
 			name:          "чужой клиент не получает успех для опубликованной поездки",
 			status:        domain.TripStatusPublished,
 			anotherClient: true,
 			errorContains: "forbidden",
+			httpStatus:    http.StatusForbidden,
 		},
 		{
 			name:          "отменённую поездку нельзя опубликовать",
 			status:        domain.TripStatusCanceled,
 			errorContains: "invalid trip status",
+			httpStatus:    http.StatusConflict,
 		},
 		{
 			name:          "завершённую поездку нельзя опубликовать",
 			status:        domain.TripStatusCompleted,
 			errorContains: "invalid trip status",
+			httpStatus:    http.StatusConflict,
 		},
 	}
 
@@ -322,7 +329,7 @@ func TestServer_PublishTrip_DomainErrors(t *testing.T) {
 				clientID = uuid.New()
 			}
 
-			response := sendPublishTripRequest(t, dto.PublishTripRequest{
+			response := sendPublishTripRequest(t, tt.httpStatus, dto.PublishTripRequest{
 				TripID:   trip.ID.String(),
 				ClientID: clientID.String(),
 			})
@@ -349,32 +356,37 @@ func TestServer_PublishTrip_DomainErrors(t *testing.T) {
 func TestServer_PublishTrip_Validation(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name   string
-		change func(*dto.PublishTripRequest)
+		name       string
+		change     func(*dto.PublishTripRequest)
+		httpStatus int
 	}{
 		{
 			name: "пустой trip_id",
 			change: func(r *dto.PublishTripRequest) {
 				r.TripID = ""
 			},
+			httpStatus: http.StatusOK,
 		},
 		{
 			name: "некорректный trip_id",
 			change: func(r *dto.PublishTripRequest) {
 				r.TripID = "not-a-uuid"
 			},
+			httpStatus: http.StatusOK,
 		},
 		{
 			name: "пустой client_id",
 			change: func(r *dto.PublishTripRequest) {
 				r.ClientID = ""
 			},
+			httpStatus: http.StatusOK,
 		},
 		{
 			name: "некорректный client_id",
 			change: func(r *dto.PublishTripRequest) {
 				r.ClientID = "not-a-uuid"
 			},
+			httpStatus: http.StatusOK,
 		},
 	}
 
@@ -390,7 +402,7 @@ func TestServer_PublishTrip_Validation(t *testing.T) {
 			}
 			tt.change(&request)
 
-			response := sendPublishTripRequest(t, request)
+			response := sendPublishTripRequest(t, tt.httpStatus, request)
 
 			require.Nil(t, response.Data)
 			require.NotEmpty(t, response.Errors)

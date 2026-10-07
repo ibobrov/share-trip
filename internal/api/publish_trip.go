@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ibobrov/share_trip/internal/api/dto"
+	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 )
 
@@ -39,6 +41,10 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 			"publish trip failed",
 			slog.Any("error", err),
 		)
+		if errors.Is(err, domain.ErrSkipOperation) {
+			return SuccessWithHttpStatus(c, fiber.StatusOK, dto.PublishTripResponse{TripID: publishedTripId})
+		}
+
 		return HandleError(c, err)
 	}
 
@@ -47,5 +53,5 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 		slog.String("trip_id", publishedTripId.String()),
 	)
 
-	return Success(c, dto.PublishTripResponse{TripID: publishedTripId})
+	return SuccessWithHttpStatus(c, fiber.StatusCreated, dto.PublishTripResponse{TripID: publishedTripId})
 }
