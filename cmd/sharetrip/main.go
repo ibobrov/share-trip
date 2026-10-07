@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ibobrov/share_trip/internal/api"
+	"github.com/ibobrov/share_trip/internal/app"
 	"github.com/ibobrov/share_trip/internal/domain"
+	"github.com/ibobrov/share_trip/internal/observability/middleware"
 	"github.com/ibobrov/share_trip/internal/repository"
 	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/joho/godotenv"
@@ -43,10 +46,23 @@ func main() {
 	tripService := service.NewTripService(pool, tripUseCase)
 	server := api.NewServer(pool, tripService)
 
-	app := fiber.New()
-	server.Route(app)
+	application := fiber.New()
+
+	logger, logFile, err := app.NewLogger()
+	if err != nil {
+		panic(err)
+	}
+	defer func(logFile *os.File) {
+		err := logFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(logFile)
+	application.Use(middleware.Correlation(logger))
+
+	server.Route(application.Group(""))
 	httpPort := config.Env("HTTP_PORT", "8080")
-	if err := app.Listen(":" + httpPort); err != nil {
+	if err := application.Listen(":" + httpPort); err != nil {
 		log.Fatal(err)
 	}
 }
