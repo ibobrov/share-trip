@@ -9,20 +9,20 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/ibobrov/share_trip/internal/api/dto"
+	"github.com/ibobrov/share_trip/internal/api"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/stretchr/testify/require"
 )
 
 type createTripTestResponse struct {
-	Data   *dto.CreateTripResponse `json:"data"`
+	Data   *api.CreateTripResponse `json:"data"`
 	Errors []string                `json:"errors"`
 }
 
 func sendCreateTripRequest(
 	t *testing.T,
 	expectedStatus int,
-	payload dto.CreateTripRequest,
+	payload api.CreateTripRequest,
 ) createTripTestResponse {
 	t.Helper()
 
@@ -47,7 +47,7 @@ func TestServer_CreateTrip(t *testing.T) {
 			Truncate(time.Second)
 		availableSeats := 1
 
-		response := sendCreateTripRequest(t, fiber.StatusOK, dto.CreateTripRequest{
+		res := sendCreateTripRequest(t, fiber.StatusOK, api.CreateTripRequest{
 			ClientID:       clientID.String(),
 			FromPoint:      fromPoint,
 			ToPoint:        toPoint,
@@ -55,10 +55,10 @@ func TestServer_CreateTrip(t *testing.T) {
 			AvailableSeats: availableSeats,
 		})
 
-		require.Empty(t, response.Errors)
-		require.NotNil(t, response.Data)
+		require.Empty(t, res.Errors)
+		require.NotNil(t, res.Data)
 
-		got := response.Data
+		got := res.Data
 
 		require.NotEqual(t, uuid.Nil, got.ID)
 		require.Equal(t, clientID, got.ClientID)
@@ -72,7 +72,7 @@ func TestServer_CreateTrip(t *testing.T) {
 			got.DepartureTime,
 		)
 		require.Equal(t, availableSeats, got.AvailableSeats)
-		require.Equal(t, string(domain.TripStatusDraft), string(got.Status))
+		require.Equal(t, string(domain.TripStatusDraft), got.Status)
 		require.False(t, got.CreatedAt.IsZero())
 
 		ctx, cancel := context.WithTimeout(
@@ -167,12 +167,12 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name          string
-		change        func(*dto.CreateTripRequest)
+		change        func(*api.CreateTripRequest)
 		errorContains string
 	}{
 		{
 			name: "время отправления в прошлом",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.DepartureTime = time.Now().
 					Add(-time.Hour).
 					Format(time.RFC3339)
@@ -181,68 +181,68 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 		},
 		{
 			name: "отрицательное количество мест",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.AvailableSeats = -1
 			},
 			errorContains: "недопустимое кол-во слотов в поездке",
 		},
 		{
 			name: "нулевое количество мест",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.AvailableSeats = 0
 			},
 		},
 		{
 			name: "пустой client_id",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.ClientID = ""
 			},
 		},
 		{
 			name: "некорректный UUID",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.ClientID = "not-a-uuid"
 			},
 		},
 		{
 			name: "пустой пункт отправления",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.FromPoint = ""
 			},
 		},
 		{
 			name: "пункт отправления из пробелов",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.FromPoint = "   "
 			},
 		},
 		{
 			name: "пустой пункт назначения",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.ToPoint = ""
 			},
 		},
 		{
 			name: "пункт назначения из пробелов",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.ToPoint = "   "
 			},
 		},
 		{
 			name: "пустая дата",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.DepartureTime = ""
 			},
 		},
 		{
 			name: "некорректный формат даты",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.DepartureTime = "завтра"
 			},
 		},
 		{
 			name: "несуществующая дата",
-			change: func(r *dto.CreateTripRequest) {
+			change: func(r *api.CreateTripRequest) {
 				r.DepartureTime = "2030-02-30T12:00:00Z"
 			},
 		},
@@ -256,7 +256,7 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 			fromMarker := "Москва-" + uuid.NewString()
 			toMarker := "Владивосток-" + uuid.NewString()
 
-			payload := dto.CreateTripRequest{
+			payload := api.CreateTripRequest{
 				ClientID:       uuid.NewString(),
 				FromPoint:      fromMarker,
 				ToPoint:        toMarker,

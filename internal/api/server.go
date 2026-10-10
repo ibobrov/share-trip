@@ -34,7 +34,7 @@ func NewServer(
 func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx, logger *slog.Logger) (ok bool, err error) {
 	if err := c.BodyParser(request); err != nil {
 		logger.Warn(
-			"create trip failed: invalid json body",
+			"create request failed: invalid json body",
 			slog.Any("error", err),
 			slog.String("layer", "validation"),
 		)
@@ -56,7 +56,7 @@ func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx, logger *sl
 		}
 
 		logger.Warn(
-			"create trip failed:",
+			"create request failed:",
 			slog.Any("error", validationErrors),
 			slog.String("layer", "validation"),
 		)
@@ -68,27 +68,23 @@ func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx, logger *sl
 }
 
 func HandleError(c *fiber.Ctx, err error) error {
-	if err != nil {
-		switch {
-		case errors.Is(err, domain.ErrNotFound):
-			return FailureWithHttpStatus(c, fiber.StatusNotFound, err.Error())
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return FailureWithHttpStatus(c, fiber.StatusNotFound, err.Error())
 
-		case errors.Is(err, domain.ErrForbidden):
-			return FailureWithHttpStatus(c, fiber.StatusForbidden, err.Error())
+	case errors.Is(err, domain.ErrForbidden):
+		return FailureWithHttpStatus(c, fiber.StatusForbidden, err.Error())
 
-		case errors.Is(err, domain.ErrConflict):
-			return FailureWithHttpStatus(c, fiber.StatusConflict, err.Error())
+	case errors.Is(err, domain.ErrConflict):
+		return FailureWithHttpStatus(c, fiber.StatusConflict, err.Error())
 
-		case errors.Is(err, domain.ErrSkipOperation):
-			return FailureWithHttpStatus(c, fiber.StatusNoContent, err.Error())
+	case errors.Is(err, domain.ErrSkipOperation):
+		return FailureWithHttpStatus(c, fiber.StatusNoContent, err.Error())
 
-		case errors.Is(err, domain.ErrDomain):
-			return Failure(c, err.Error())
+	case errors.Is(err, domain.ErrDomain):
+		return Failure(c, err.Error())
 
-		default:
-			return FailureWithHttpStatus(c, fiber.StatusInternalServerError, err.Error())
-		}
+	default:
+		return FailureWithHttpStatus(c, fiber.StatusInternalServerError, err.Error())
 	}
-
-	return nil
 }

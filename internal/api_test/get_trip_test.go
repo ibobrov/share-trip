@@ -8,13 +8,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/ibobrov/share_trip/internal/api/dto"
+	"github.com/ibobrov/share_trip/internal/api"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/stretchr/testify/require"
 )
 
 type getTripTestResponse struct {
-	Data   *dto.GetTripResponse `json:"data"`
+	Data   *api.GetTripResponse `json:"data"`
 	Errors []string             `json:"errors"`
 }
 
@@ -45,7 +45,7 @@ func TestServer_GetTrip(t *testing.T) {
 			Add(time.Hour).
 			Truncate(time.Second)
 
-		created := sendCreateTripRequest(t, fiber.StatusOK, dto.CreateTripRequest{
+		created := sendCreateTripRequest(t, fiber.StatusOK, api.CreateTripRequest{
 			ClientID:       clientID.String(),
 			FromPoint:      "Москва",
 			ToPoint:        "Коломна",

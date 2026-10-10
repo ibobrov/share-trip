@@ -1,14 +1,33 @@
 package api
 
 import (
-	"context"
 	"log/slog"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ibobrov/share_trip/internal/api/dto"
+	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
+	"github.com/ibobrov/share_trip/internal/service"
 )
+
+type CreateTripRequest struct {
+	ClientID       string `json:"client_id" valid:"required,uuid"`
+	FromPoint      string `json:"from_point" valid:"required,matches(\\S)"`
+	ToPoint        string `json:"to_point" valid:"required,matches(\\S)"`
+	DepartureTime  string `json:"departure_time" valid:"required,rfc3339"`
+	AvailableSeats int    `json:"available_seats" valid:"required"`
+}
+
+type CreateTripResponse struct {
+	ID             uuid.UUID `json:"id"`
+	ClientID       uuid.UUID `json:"client_id"`
+	FromPoint      string    `json:"from_point"`
+	ToPoint        string    `json:"to_point"`
+	DepartureTime  time.Time `json:"departure_time"`
+	AvailableSeats int       `json:"available_seats"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+}
 
 func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	ctx := c.UserContext()
@@ -18,22 +37,27 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		slog.String("handler", "CreateTrip"),
 	)
 
-	var request dto.CreateTripRequest
-	ok, err := ParseAndValidateRequest(&request, c, logger)
+	var req CreateTripRequest
+	ok, err := ParseAndValidateRequest(&req, c, logger)
 	if !ok {
 		return err
 	}
 
 	logger = logger.With(
-		slog.String("client_id", request.ClientID),
+		slog.String("client_id", req.ClientID),
 	)
-
-	ctx, cancel := context.WithTimeout(logctx.WithLogger(ctx, logger), 2*time.Second)
-	defer cancel()
-
 	logger.Info("create trip request accepted")
 
-	createdTrip, err := s.tripService.CreateTrip(ctx, request.ToNewTripDomain())
+	clientID, _ := uuid.Parse(req.ClientID)
+	departureTime, _ := time.Parse(time.RFC3339, req.DepartureTime)
+
+	res, err := s.tripService.CreateTrip(ctx, service.CreateTripRequest{
+		ClientID:       clientID,
+		FromPoint:      req.FromPoint,
+		ToPoint:        req.ToPoint,
+		DepartureTime:  departureTime,
+		AvailableSeats: req.AvailableSeats,
+	})
 	if err != nil {
 		logger.Error(
 			"create trip failed",
@@ -44,8 +68,17 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 
 	logger.Info(
 		"create trip completed",
-		slog.String("trip_id", createdTrip.ID.String()),
+		slog.String("trip_id", res.ID.String()),
 	)
 
-	return Success(c, dto.CreateTripResponseFromTripDomain(createdTrip))
+	return Success(c, CreateTripResponse{
+		ID:             res.ID,
+		ClientID:       res.ClientID,
+		FromPoint:      res.FromPoint,
+		ToPoint:        res.ToPoint,
+		DepartureTime:  res.DepartureTime,
+		AvailableSeats: res.AvailableSeats,
+		Status:         res.Status,
+		CreatedAt:      res.CreatedAt,
+	})
 }

@@ -18,6 +18,28 @@ type TripRepository struct {
 	metrics *metrics.Metrics
 }
 
+type CreateTripRequest struct {
+	ID            uuid.UUID
+	ClientID      uuid.UUID
+	FromPoint     string
+	ToPoint       string
+	DepartureTime time.Time
+	Seats         int
+	Status        string
+	CreatedAt     time.Time
+}
+
+type CreateTripResponse struct {
+	ID            uuid.UUID
+	ClientID      uuid.UUID
+	FromPoint     string
+	ToPoint       string
+	DepartureTime time.Time
+	Seats         int
+	Status        string
+	CreatedAt     time.Time
+}
+
 func NewTripRepository(metrics *metrics.Metrics) *TripRepository {
 	return &TripRepository{
 		metrics: metrics,
@@ -27,7 +49,7 @@ func NewTripRepository(metrics *metrics.Metrics) *TripRepository {
 func (r *TripRepository) CreateTrip(
 	ctx context.Context,
 	tx pgx.Tx,
-	trip entity.Trip,
+	req CreateTripRequest,
 ) error {
 	started := time.Now()
 	metricRsl := "success"
@@ -48,8 +70,8 @@ func (r *TripRepository) CreateTrip(
 		slog.String("layer", "repository"),
 		slog.String("repository", "TripRepository"),
 		slog.String("operation", "Create"),
-		slog.String("trip_id", trip.ID.String()),
-		slog.String("client_id", trip.ClientID.String()),
+		slog.String("trip_id", req.ID.String()),
+		slog.String("client_id", req.ClientID.String()),
 	)
 	logger.Info("insert trip started")
 
@@ -58,14 +80,14 @@ func (r *TripRepository) CreateTrip(
 			INSERT INTO trips (id, client_id, from_point, to_point, departure_time, seats, status, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		`,
-		trip.ID,
-		trip.ClientID,
-		trip.FromPoint,
-		trip.ToPoint,
-		trip.DepartureTime,
-		trip.Seats,
-		trip.Status,
-		trip.CreatedAt)
+		req.ID,
+		req.ClientID,
+		req.FromPoint,
+		req.ToPoint,
+		req.DepartureTime,
+		req.Seats,
+		req.Status,
+		req.CreatedAt)
 	if err != nil {
 		logger.Error(
 			"insert trip failed",

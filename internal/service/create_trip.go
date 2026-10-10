@@ -7,19 +7,40 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/jackc/pgx/v5"
 )
 
+type CreateTripRequest struct {
+	ClientID       uuid.UUID
+	FromPoint      string
+	ToPoint        string
+	DepartureTime  time.Time
+	AvailableSeats int
+}
+
+type CreateTripResponse struct {
+	ID             uuid.UUID
+	ClientID       uuid.UUID
+	FromPoint      string
+	ToPoint        string
+	DepartureTime  time.Time
+	AvailableSeats int
+	Status         string
+	CreatedAt      time.Time
+}
+
 func (s *TripService) CreateTrip(
 	ctx context.Context,
-	newTrip domain.NewTrip,
-) (domain.Trip, error) {
+	request CreateTripRequest,
+) (CreateTripResponse, error) {
+
 	logger := logctx.Logger(ctx).With(
 		slog.String("service", "TripService"),
 		slog.String("operation", "CreateTrip"),
-		slog.String("client_id", newTrip.ClientID.String()),
+		slog.String("client_id", request.ClientID.String()),
 		slog.String("layer", "service"),
 	)
 
@@ -34,8 +55,14 @@ func (s *TripService) CreateTrip(
 			Observe(time.Since(started).Seconds())
 	}()
 
-	result, err := tx(ctx, s.pool, func(tx pgx.Tx) (*domain.Trip, error) {
-		trip, err := s.tripUseCase.CreateTrip(ctx, tx, newTrip)
+	result, err := tx(ctx, s.pool, func(tx pgx.Tx) (*CreateTripResponse, error) {
+		res, err := s.tripUseCase.CreateTrip(ctx, tx, domain.CreateTripRequest{
+			ClientID:      request.ClientID,
+			FromPoint:     request.FromPoint,
+			ToPoint:       request.ToPoint,
+			DepartureTime: request.DepartureTime,
+			Seats:         request.AvailableSeats,
+		})
 
 		if err != nil {
 			if errors.Is(err, domain.ErrDomain) {
@@ -52,7 +79,16 @@ func (s *TripService) CreateTrip(
 			return nil, fmt.Errorf("usecase.CreateTrip: %w", err)
 		}
 
-		return trip, nil
+		return &CreateTripResponse{
+			ID:             res.ID,
+			ClientID:       res.ClientID,
+			FromPoint:      res.FromPoint,
+			ToPoint:        res.ToPoint,
+			DepartureTime:  res.DepartureTime,
+			AvailableSeats: res.Seats,
+			Status:         res.Status,
+			CreatedAt:      res.CreatedAt,
+		}, nil
 	})
 
 	if err != nil {
@@ -60,7 +96,7 @@ func (s *TripService) CreateTrip(
 			"create trip failed",
 			slog.Any("error", err),
 		)
-		return domain.Trip{}, fmt.Errorf("failed in transaction: %w", err)
+		return CreateTripResponse{}, fmt.Errorf("failed in transaction: %w", err)
 	}
 
 	logger.Info(

@@ -1,18 +1,26 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"log/slog"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ibobrov/share_trip/internal/api/dto"
+	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
+	"github.com/ibobrov/share_trip/internal/service"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
+
+type PublishTripRequest struct {
+	TripID   string `json:"trip_id" valid:"required,uuid"`
+	ClientID string `json:"client_id" valid:"required,uuid"`
+}
+
+type PublishTripResponse struct {
+	TripID uuid.UUID `json:"trip_id"`
+}
 
 func (s *Server) PublishTrip(c *fiber.Ctx) error {
 	tracer := otel.Tracer("trip-api")
@@ -27,34 +35,38 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 		slog.String("handler", "PublishTrip"),
 	)
 
-	var request dto.PublishTripRequest
-	ok, err := ParseAndValidateRequest(&request, c, logger)
+	var req PublishTripRequest
+	ok, err := ParseAndValidateRequest(&req, c, logger)
 	if !ok {
 		return err
 	}
 
 	span.SetAttributes(
-		attribute.String("trip_id", request.TripID),
-		attribute.String("client_id", request.ClientID),
+		attribute.String("trip_id", req.TripID),
+		attribute.String("client_id", req.ClientID),
 	)
 
 	logger = logger.With(
-		slog.String("client_id", request.ClientID),
+		slog.String("client_id", req.ClientID),
 	)
-
-	ctx, cancel := context.WithTimeout(logctx.WithLogger(ctx, logger), 2*time.Second)
-	defer cancel()
 
 	logger.Info("publish trip request accepted")
 
-	publishedTripId, err := s.tripService.PublishTrip(ctx, request.ToPublishTripDomain())
+	tripID, _ := uuid.Parse(req.TripID)
+	clientID, _ := uuid.Parse(req.ClientID)
+
+	res, err := s.tripService.PublishTrip(ctx, service.PublishTripRequest{
+		TripID:   tripID,
+		ClientID: clientID,
+	})
+
 	if err != nil {
 		logger.Error(
 			"publish trip failed",
 			slog.Any("error", err),
 		)
 		if errors.Is(err, domain.ErrSkipOperation) {
-			return SuccessWithHttpStatus(c, fiber.StatusOK, dto.PublishTripResponse{TripID: publishedTripId})
+			return SuccessWithHttpStatus(c, fiber.StatusOK, PublishTripResponse{TripID: res.TripID})
 		}
 
 		return HandleError(c, err)
@@ -62,8 +74,8 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 
 	logger.Info(
 		"publish trip completed",
-		slog.String("trip_id", publishedTripId.String()),
+		slog.String("trip_id", req.TripID),
 	)
 
-	return SuccessWithHttpStatus(c, fiber.StatusCreated, dto.PublishTripResponse{TripID: publishedTripId})
+	return SuccessWithHttpStatus(c, fiber.StatusCreated, PublishTripResponse{TripID: res.TripID})
 }

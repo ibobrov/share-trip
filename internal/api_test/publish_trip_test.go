@@ -10,13 +10,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/ibobrov/share_trip/internal/api/dto"
+	"github.com/ibobrov/share_trip/internal/api"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/stretchr/testify/require"
 )
 
 type publishTripTestResponse struct {
-	Data   *dto.PublishTripResponse `json:"data"`
+	Data   *api.PublishTripResponse `json:"data"`
 	Errors []string                 `json:"errors"`
 }
 
@@ -29,7 +29,7 @@ type publishTripDBState struct {
 func sendPublishTripRequest(
 	t *testing.T,
 	expectedStatus int,
-	payload dto.PublishTripRequest,
+	payload api.PublishTripRequest,
 ) publishTripTestResponse {
 	t.Helper()
 
@@ -42,10 +42,10 @@ func sendPublishTripRequest(
 	)
 }
 
-func createDraftForPublishTest(t *testing.T) *dto.CreateTripResponse {
+func createDraftForPublishTest(t *testing.T) *api.CreateTripResponse {
 	t.Helper()
 
-	response := sendCreateTripRequest(t, fiber.StatusOK, dto.CreateTripRequest{
+	response := sendCreateTripRequest(t, fiber.StatusOK, api.CreateTripRequest{
 		ClientID:       uuid.NewString(),
 		FromPoint:      "Москва",
 		ToPoint:        "Коломна",
@@ -128,7 +128,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		trip := createDraftForPublishTest(t)
 		before := readPublishTripState(t, trip.ID)
 
-		response := sendPublishTripRequest(t, fiber.StatusCreated, dto.PublishTripRequest{
+		response := sendPublishTripRequest(t, fiber.StatusCreated, api.PublishTripRequest{
 			TripID:   trip.ID.String(),
 			ClientID: trip.ClientID.String(),
 		})
@@ -222,7 +222,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		t.Parallel()
 		trip := createDraftForPublishTest(t)
 
-		request := dto.PublishTripRequest{
+		request := api.PublishTripRequest{
 			TripID:   trip.ID.String(),
 			ClientID: trip.ClientID.String(),
 		}
@@ -248,7 +248,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		t.Parallel()
 		tripID := uuid.New()
 
-		response := sendPublishTripRequest(t, fiber.StatusNotFound, dto.PublishTripRequest{
+		response := sendPublishTripRequest(t, fiber.StatusNotFound, api.PublishTripRequest{
 			TripID:   tripID.String(),
 			ClientID: uuid.NewString(),
 		})
@@ -329,7 +329,7 @@ func TestServer_PublishTrip_DomainErrors(t *testing.T) {
 				clientID = uuid.New()
 			}
 
-			response := sendPublishTripRequest(t, tt.httpStatus, dto.PublishTripRequest{
+			response := sendPublishTripRequest(t, tt.httpStatus, api.PublishTripRequest{
 				TripID:   trip.ID.String(),
 				ClientID: clientID.String(),
 			})
@@ -357,33 +357,33 @@ func TestServer_PublishTrip_Validation(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
-		change     func(*dto.PublishTripRequest)
+		change     func(*api.PublishTripRequest)
 		httpStatus int
 	}{
 		{
 			name: "пустой trip_id",
-			change: func(r *dto.PublishTripRequest) {
+			change: func(r *api.PublishTripRequest) {
 				r.TripID = ""
 			},
 			httpStatus: http.StatusOK,
 		},
 		{
 			name: "некорректный trip_id",
-			change: func(r *dto.PublishTripRequest) {
+			change: func(r *api.PublishTripRequest) {
 				r.TripID = "not-a-uuid"
 			},
 			httpStatus: http.StatusOK,
 		},
 		{
 			name: "пустой client_id",
-			change: func(r *dto.PublishTripRequest) {
+			change: func(r *api.PublishTripRequest) {
 				r.ClientID = ""
 			},
 			httpStatus: http.StatusOK,
 		},
 		{
 			name: "некорректный client_id",
-			change: func(r *dto.PublishTripRequest) {
+			change: func(r *api.PublishTripRequest) {
 				r.ClientID = "not-a-uuid"
 			},
 			httpStatus: http.StatusOK,
@@ -396,7 +396,7 @@ func TestServer_PublishTrip_Validation(t *testing.T) {
 			trip := createDraftForPublishTest(t)
 			before := readPublishTripState(t, trip.ID)
 
-			request := dto.PublishTripRequest{
+			request := api.PublishTripRequest{
 				TripID:   trip.ID.String(),
 				ClientID: trip.ClientID.String(),
 			}

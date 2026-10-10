@@ -13,11 +13,20 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+type PublishTripRequest struct {
+	TripID   uuid.UUID
+	ClientID uuid.UUID
+}
+
+type PublishTripResponse struct {
+	TripID uuid.UUID
+}
+
 func (u *TripUseCase) MoveTripDraftToPublish(
 	ctx context.Context,
 	tx pgx.Tx,
 	req PublishTripRequest,
-) (*uuid.UUID, error) {
+) (*PublishTripResponse, error) {
 	tracer := otel.Tracer("TripUsecase")
 
 	ctx, span := tracer.Start(ctx, "TripUsecase.PublishTrip")
@@ -38,7 +47,7 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 
 	// Повторный запрос успешен, но новых истории и события не создаёт.
 	if trip.Status == string(TripStatusPublished) {
-		return &trip.ID, ErrSkipOperation
+		return &PublishTripResponse{TripID: trip.ID}, ErrSkipOperation
 	}
 
 	if trip.Status != string(TripStatusDraft) {
@@ -88,5 +97,5 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 		return nil, fmt.Errorf("create trip published event: %w", err)
 	}
 
-	return &trip.ID, nil
+	return &PublishTripResponse{TripID: trip.ID}, nil
 }
