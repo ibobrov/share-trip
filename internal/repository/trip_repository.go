@@ -29,17 +29,6 @@ type CreateTripRequest struct {
 	CreatedAt     time.Time
 }
 
-type CreateTripResponse struct {
-	ID            uuid.UUID
-	ClientID      uuid.UUID
-	FromPoint     string
-	ToPoint       string
-	DepartureTime time.Time
-	Seats         int
-	Status        string
-	CreatedAt     time.Time
-}
-
 func NewTripRepository(metrics *metrics.Metrics) *TripRepository {
 	return &TripRepository{
 		metrics: metrics,

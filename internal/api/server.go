@@ -78,9 +78,6 @@ func HandleError(c *fiber.Ctx, err error) error {
 	case errors.Is(err, domain.ErrConflict):
 		return FailureWithHttpStatus(c, fiber.StatusConflict, err.Error())
 
-	case errors.Is(err, domain.ErrSkipOperation):
-		return FailureWithHttpStatus(c, fiber.StatusNoContent, err.Error())
-
 	case errors.Is(err, domain.ErrDomain):
 		return Failure(c, err.Error())
 

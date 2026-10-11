@@ -208,7 +208,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		require.Equal(t, "trip_published", eventName)
 		require.Equal(t, trip.ID, aggregateID)
 		require.False(t, eventTime.IsZero())
-		require.True(t, historyTime.Equal(eventTime))
+		require.True(t, eventTime.After(historyTime))
 
 		var eventPayload struct {
 			TripID uuid.UUID `json:"trip_id"`

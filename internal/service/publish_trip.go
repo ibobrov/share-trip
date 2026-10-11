@@ -20,7 +20,8 @@ type PublishTripRequest struct {
 }
 
 type PublishTripResponse struct {
-	TripID uuid.UUID
+	TripID             uuid.UUID
+	IsAlreadyPublished bool
 }
 
 func (s *TripService) PublishTrip(
@@ -55,37 +56,45 @@ func (s *TripService) PublishTrip(
 			})
 
 			if err != nil {
-
 				logger.Error(
-					"get trip usecase failed",
+					"publish trip usecase failed",
 					slog.String("layer", "transaction"),
 					slog.Any("error", err),
 				)
-				return nil, fmt.Errorf("usecase.GetTrip: %w", err)
+				return nil, fmt.Errorf("usecase.MoveTripDraftToPublish: %w", err)
+			}
+
+			if !res.IsAlreadyPublished {
+				err = s.tripUseCase.SentNotificationTripPublish(ctx, tx, domain.SentNotificationTripPublishRequest{
+					TripID: req.TripID,
+				})
+
+				if err != nil {
+					logger.Error(
+						"sent notification trip publish usecase failed",
+						slog.String("layer", "transaction"),
+						slog.Any("error", err),
+					)
+					return nil, fmt.Errorf("usecase.SentNotificationTripPublish: %w", err)
+				}
 			}
 
 			return &PublishTripResponse{
-				TripID: res.TripID,
+				TripID:             res.TripID,
+				IsAlreadyPublished: res.IsAlreadyPublished,
 			}, nil
 		},
 	)
 
 	if err != nil {
 		switch {
-		case errors.Is(err, domain.ErrSkipOperation):
-			metricRsl = "already_published"
-			return PublishTripResponse{TripID: req.TripID}, err
 		case errors.Is(err, domain.ErrConflict) || errors.Is(err, domain.ErrForbidden):
 			metricRsl = "conflict"
 		default:
 			metricRsl = "internal_error"
 		}
 
-		return PublishTripResponse{}, err
-	}
-
-	if result == nil {
-		return PublishTripResponse{}, errors.New("publish trip returned nil UUID")
+		return PublishTripResponse{}, fmt.Errorf("tripService.PublishTrip:%w", err)
 	}
 
 	return *result, nil

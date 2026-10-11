@@ -2,7 +2,6 @@ package domain
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -19,7 +18,8 @@ type PublishTripRequest struct {
 }
 
 type PublishTripResponse struct {
-	TripID uuid.UUID
+	TripID             uuid.UUID
+	IsAlreadyPublished bool
 }
 
 func (u *TripUseCase) MoveTripDraftToPublish(
@@ -47,7 +47,7 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 
 	// Повторный запрос успешен, но новых истории и события не создаёт.
 	if trip.Status == string(TripStatusPublished) {
-		return &PublishTripResponse{TripID: trip.ID}, ErrSkipOperation
+		return &PublishTripResponse{TripID: trip.ID, IsAlreadyPublished: true}, nil
 	}
 
 	if trip.Status != string(TripStatusDraft) {
@@ -76,26 +76,11 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 		CreatedAt:  createdAt,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("CreateTripHistory: %w", err)
+		return nil, fmt.Errorf("tripHistoryRepo.CreateTripHistory: %w", err)
 	}
 
-	tripPublishEventPayload, err := json.Marshal(entity.PublishTripPayload{
-		TripID: trip.ID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("marshal trip published payload: %w", err)
-	}
-
-	err = u.outboxRepo.Create(ctx, tx, entity.OutboxEvent{
-		ID:          uuid.New(),
-		EventName:   "trip_published",
-		AggregateID: trip.ID,
-		Payload:     tripPublishEventPayload,
-		CreatedAt:   createdAt,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create trip published event: %w", err)
-	}
-
-	return &PublishTripResponse{TripID: trip.ID}, nil
+	return &PublishTripResponse{
+		TripID:             trip.ID,
+		IsAlreadyPublished: false,
+	}, nil
 }

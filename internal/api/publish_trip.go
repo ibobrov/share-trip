@@ -1,12 +1,10 @@
 package api
 
 import (
-	"errors"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/ibobrov/share_trip/internal/service"
 	"go.opentelemetry.io/otel"
@@ -65,9 +63,6 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 			"publish trip failed",
 			slog.Any("error", err),
 		)
-		if errors.Is(err, domain.ErrSkipOperation) {
-			return SuccessWithHttpStatus(c, fiber.StatusOK, PublishTripResponse{TripID: res.TripID})
-		}
 
 		return HandleError(c, err)
 	}
@@ -76,6 +71,10 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 		"publish trip completed",
 		slog.String("trip_id", req.TripID),
 	)
+
+	if res.IsAlreadyPublished {
+		return Success(c, PublishTripResponse{TripID: res.TripID})
+	}
 
 	return SuccessWithHttpStatus(c, fiber.StatusCreated, PublishTripResponse{TripID: res.TripID})
 }
