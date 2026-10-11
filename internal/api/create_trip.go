@@ -67,17 +67,13 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		AvailableSeats: req.AvailableSeats,
 	})
 	if err != nil {
-		logger.Error(
-			"create trip failed",
-			slog.Any("error", err),
-		)
-		return HandleError(c, err)
+		return HandleError(c, func() {
+			logger.Error(
+				"create trip failed",
+				slog.Any("error", err),
+			)
+		}, err)
 	}
-
-	logger.Info(
-		"create trip completed",
-		slog.String("trip_id", res.ID.String()),
-	)
 
 	return Success(c, CreateTripResponse{
 		ID:             res.ID,

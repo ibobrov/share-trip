@@ -67,18 +67,13 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
-		logger.Error(
-			"publish trip failed",
-			slog.Any("error", err),
-		)
-
-		return HandleError(c, err)
+		return HandleError(c, func() {
+			logger.Error(
+				"publish trip failed",
+				slog.Any("error", err),
+			)
+		}, err)
 	}
-
-	logger.Info(
-		"publish trip completed",
-		slog.String("trip_id", req.TripID),
-	)
 
 	if res.IsAlreadyPublished {
 		return Success(c, PublishTripResponse{TripID: res.TripID})

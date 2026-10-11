@@ -1,10 +1,12 @@
 package api
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/ibobrov/share_trip/internal/service"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -29,6 +31,12 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 
 	c.Set("trace-id", span.SpanContext().TraceID().String())
 
+	logger := logctx.Logger(ctx).With(
+		slog.String("server", "TripServer"),
+		slog.String("handler", "GetTrip"),
+	)
+	logger.Info("get trip request accepted")
+
 	tripID, err := uuid.Parse(c.Params("tripId"))
 	if err != nil {
 		return Failure(c, "invalid trip id")
@@ -40,7 +48,12 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 
 	res, err := s.tripService.GetTripByIdRequest(ctx, service.GetTripRequest{TripID: tripID})
 	if err != nil {
-		return HandleError(c, err)
+		return HandleError(c, func() {
+			logger.Error(
+				"get trip failed",
+				slog.Any("error", err),
+			)
+		}, err)
 	}
 	return Success(c, GetTripResponse{
 		ID:             res.ID,

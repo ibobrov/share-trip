@@ -7,7 +7,7 @@ import (
 	"github.com/ibobrov/share_trip/internal/domain"
 )
 
-func HandleError(c *fiber.Ctx, err error) error {
+func HandleError(c *fiber.Ctx, internalServerErrorLogFunc func(), err error) error {
 	switch {
 	case err == nil:
 		return nil
@@ -25,6 +25,7 @@ func HandleError(c *fiber.Ctx, err error) error {
 		return Failure(c, err.Error())
 
 	default:
+		internalServerErrorLogFunc()
 		return FailureWithHttpStatus(c, fiber.StatusInternalServerError, err.Error())
 	}
 }
