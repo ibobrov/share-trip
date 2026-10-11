@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
@@ -50,8 +51,15 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 
 	logger.Info("publish trip request accepted")
 
-	tripID, _ := uuid.Parse(req.TripID)
-	clientID, _ := uuid.Parse(req.ClientID)
+	tripID, err := uuid.Parse(req.TripID)
+	if err != nil {
+		return fmt.Errorf("when parse tripID: %w", err)
+	}
+
+	clientID, err := uuid.Parse(req.ClientID)
+	if err != nil {
+		return fmt.Errorf("when parse clientID: %w", err)
+	}
 
 	res, err := s.tripService.PublishTrip(ctx, service.PublishTripRequest{
 		TripID:   tripID,

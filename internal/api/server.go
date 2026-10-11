@@ -1,13 +1,11 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/asaskevich/govalidator/v12"
 	"github.com/gofiber/fiber/v2"
-	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -65,23 +63,4 @@ func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx, logger *sl
 	}
 
 	return true, nil
-}
-
-func HandleError(c *fiber.Ctx, err error) error {
-	switch {
-	case errors.Is(err, domain.ErrNotFound):
-		return FailureWithHttpStatus(c, fiber.StatusNotFound, err.Error())
-
-	case errors.Is(err, domain.ErrForbidden):
-		return FailureWithHttpStatus(c, fiber.StatusForbidden, err.Error())
-
-	case errors.Is(err, domain.ErrConflict):
-		return FailureWithHttpStatus(c, fiber.StatusConflict, err.Error())
-
-	case errors.Is(err, domain.ErrDomain):
-		return Failure(c, err.Error())
-
-	default:
-		return FailureWithHttpStatus(c, fiber.StatusInternalServerError, err.Error())
-	}
 }
