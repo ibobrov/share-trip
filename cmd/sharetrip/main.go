@@ -47,7 +47,7 @@ func main() {
 		defer cancel()
 
 		if err := tp.Shutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown tracing failed: %v", err)
+			log.Fatalf("tp.Shutdown: %v", err)
 		}
 	}()
 
@@ -62,7 +62,7 @@ func main() {
 
 	pool, err := repository.NewPool(ctx, dbConfig.DSN())
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("repository.NewPool: %v", err)
 	}
 	defer pool.Close()
 
@@ -97,7 +97,7 @@ func main() {
 	server.Route(application.Group(""))
 	httpPort := config.Env("HTTP_PORT", "8080")
 	if err := application.Listen(":" + httpPort); err != nil {
-		log.Print(err)
+		log.Fatalf("application.Listen: %v", err)
 		return
 	}
 }

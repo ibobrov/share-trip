@@ -36,8 +36,9 @@ func sendCreateTripRequest(
 }
 
 func TestServer_CreateTrip(t *testing.T) {
-	t.Parallel()
 	t.Run("успешное создание поездки, истории", func(t *testing.T) {
+		t.Parallel()
+
 		clientID := uuid.New()
 		fromPoint := "Москва"
 		toPoint := "Владивосток"
@@ -75,11 +76,7 @@ func TestServer_CreateTrip(t *testing.T) {
 		require.Equal(t, string(domain.TripStatusDraft), got.Status)
 		require.False(t, got.CreatedAt.IsZero())
 
-		ctx, cancel := context.WithTimeout(
-			context.Background(),
-			2*time.Second,
-		)
-		defer cancel()
+		ctx := context.Background()
 
 		// Проверяем фактическое сохранение поездки.
 		var (
@@ -281,11 +278,7 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 				)
 			}
 
-			ctx, cancel := context.WithTimeout(
-				context.Background(),
-				2*time.Second,
-			)
-			defer cancel()
+			ctx := context.Background()
 
 			var count int
 

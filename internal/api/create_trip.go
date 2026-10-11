@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -48,8 +49,15 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	)
 	logger.Info("create trip request accepted")
 
-	clientID, _ := uuid.Parse(req.ClientID)
-	departureTime, _ := time.Parse(time.RFC3339, req.DepartureTime)
+	clientID, err := uuid.Parse(req.ClientID)
+	if err != nil {
+		return fmt.Errorf("when parse clientID: %w", err)
+	}
+
+	departureTime, err := time.Parse(time.RFC3339, req.DepartureTime)
+	if err != nil {
+		return fmt.Errorf("when parse departureTime: %w", err)
+	}
 
 	res, err := s.tripService.CreateTrip(ctx, service.CreateTripRequest{
 		ClientID:       clientID,
