@@ -30,6 +30,7 @@ func sendPublishTripRequest(
 	t *testing.T,
 	expectedStatus int,
 	payload api.PublishTripRequest,
+	options ...requestOption,
 ) publishTripTestResponse {
 	t.Helper()
 
@@ -39,19 +40,23 @@ func sendPublishTripRequest(
 		tripTestURL+"publish",
 		payload,
 		expectedStatus,
+		options...,
 	)
 }
 
-func createDraftForPublishTest(t *testing.T) *api.CreateTripResponse {
+func createDraftForPublishTest(t *testing.T, clientID uuid.UUID) *api.CreateTripResponse {
 	t.Helper()
 
-	response := sendCreateTripRequest(t, fiber.StatusOK, api.CreateTripRequest{
-		ClientID:       uuid.NewString(),
-		FromPoint:      "Москва",
-		ToPoint:        "Коломна",
-		DepartureTime:  time.Now().Add(time.Hour).Format(time.RFC3339),
-		AvailableSeats: 2,
-	})
+	response := sendCreateTripRequest(t,
+		fiber.StatusOK,
+		api.CreateTripRequest{
+			FromPoint:      "Москва",
+			ToPoint:        "Коломна",
+			DepartureTime:  time.Now().Add(time.Hour).Format(time.RFC3339),
+			AvailableSeats: 2,
+		},
+		withUser(clientID),
+	)
 
 	require.Empty(t, response.Errors)
 	require.NotNil(t, response.Data)
@@ -125,13 +130,18 @@ func TestServer_PublishTrip(t *testing.T) {
 	t.Parallel()
 	t.Run("публикация создаёт историю и событие", func(t *testing.T) {
 		t.Parallel()
-		trip := createDraftForPublishTest(t)
+		clientID := uuid.New()
+
+		trip := createDraftForPublishTest(t, clientID)
 		before := readPublishTripState(t, trip.ID)
 
-		response := sendPublishTripRequest(t, fiber.StatusCreated, api.PublishTripRequest{
-			TripID:   trip.ID.String(),
-			ClientID: trip.ClientID.String(),
-		})
+		response := sendPublishTripRequest(t,
+			fiber.StatusCreated,
+			api.PublishTripRequest{
+				TripID: trip.ID.String(),
+			},
+			withUser(clientID),
+		)
 
 		require.Empty(t, response.Errors)
 		require.NotNil(t, response.Data)
@@ -220,14 +230,14 @@ func TestServer_PublishTrip(t *testing.T) {
 
 	t.Run("повторная публикация не создаёт дубликаты", func(t *testing.T) {
 		t.Parallel()
-		trip := createDraftForPublishTest(t)
+		clientID := uuid.New()
+		trip := createDraftForPublishTest(t, clientID)
 
 		request := api.PublishTripRequest{
-			TripID:   trip.ID.String(),
-			ClientID: trip.ClientID.String(),
+			TripID: trip.ID.String(),
 		}
 
-		first := sendPublishTripRequest(t, fiber.StatusCreated, request)
+		first := sendPublishTripRequest(t, fiber.StatusCreated, request, withUser(clientID))
 		require.Empty(t, first.Errors)
 		require.NotNil(t, first.Data)
 		require.Equal(t, trip.ID, first.Data.TripID)
@@ -235,7 +245,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		before := readPublishTripState(t, trip.ID)
 		require.Equal(t, string(domain.TripStatusPublished), before.Status)
 
-		second := sendPublishTripRequest(t, fiber.StatusOK, request)
+		second := sendPublishTripRequest(t, fiber.StatusOK, request, withUser(clientID))
 		require.Empty(t, second.Errors)
 		require.NotNil(t, second.Data)
 		require.Equal(t, trip.ID, second.Data.TripID)
@@ -247,11 +257,15 @@ func TestServer_PublishTrip(t *testing.T) {
 	t.Run("поездка не найдена", func(t *testing.T) {
 		t.Parallel()
 		tripID := uuid.New()
+		clientID := uuid.New()
 
-		response := sendPublishTripRequest(t, fiber.StatusNotFound, api.PublishTripRequest{
-			TripID:   tripID.String(),
-			ClientID: uuid.NewString(),
-		})
+		response := sendPublishTripRequest(t,
+			fiber.StatusNotFound,
+			api.PublishTripRequest{
+				TripID: tripID.String(),
+			},
+			withUser(clientID),
+		)
 
 		require.Nil(t, response.Data)
 		require.NotEmpty(t, response.Errors)
@@ -319,20 +333,25 @@ func TestServer_PublishTrip_DomainErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			trip := createDraftForPublishTest(t)
+			clientID := uuid.New()
+
+			trip := createDraftForPublishTest(t, clientID)
 			setTripStatusForPublishTest(t, trip.ID, tt.status)
 
 			before := readPublishTripState(t, trip.ID)
 
-			clientID := trip.ClientID
 			if tt.anotherClient {
 				clientID = uuid.New()
 			}
 
-			response := sendPublishTripRequest(t, tt.httpStatus, api.PublishTripRequest{
-				TripID:   trip.ID.String(),
-				ClientID: clientID.String(),
-			})
+			response := sendPublishTripRequest(
+				t,
+				tt.httpStatus,
+				api.PublishTripRequest{
+					TripID: trip.ID.String(),
+				},
+				withUser(clientID),
+			)
 
 			require.Nil(t, response.Data)
 			require.NotEmpty(t, response.Errors)
@@ -374,35 +393,22 @@ func TestServer_PublishTrip_Validation(t *testing.T) {
 			},
 			httpStatus: http.StatusOK,
 		},
-		{
-			name: "пустой client_id",
-			change: func(r *api.PublishTripRequest) {
-				r.ClientID = ""
-			},
-			httpStatus: http.StatusOK,
-		},
-		{
-			name: "некорректный client_id",
-			change: func(r *api.PublishTripRequest) {
-				r.ClientID = "not-a-uuid"
-			},
-			httpStatus: http.StatusOK,
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			trip := createDraftForPublishTest(t)
+
+			clientID := uuid.New()
+			trip := createDraftForPublishTest(t, clientID)
 			before := readPublishTripState(t, trip.ID)
 
 			request := api.PublishTripRequest{
-				TripID:   trip.ID.String(),
-				ClientID: trip.ClientID.String(),
+				TripID: trip.ID.String(),
 			}
 			tt.change(&request)
 
-			response := sendPublishTripRequest(t, tt.httpStatus, request)
+			response := sendPublishTripRequest(t, tt.httpStatus, request, withUser(clientID))
 
 			require.Nil(t, response.Data)
 			require.NotEmpty(t, response.Errors)

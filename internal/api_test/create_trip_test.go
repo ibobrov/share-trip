@@ -23,6 +23,7 @@ func sendCreateTripRequest(
 	t *testing.T,
 	expectedStatus int,
 	payload api.CreateTripRequest,
+	options ...requestOption,
 ) createTripTestResponse {
 	t.Helper()
 
@@ -32,6 +33,7 @@ func sendCreateTripRequest(
 		tripTestURL+"create",
 		payload,
 		expectedStatus,
+		options...,
 	)
 }
 
@@ -48,13 +50,16 @@ func TestServer_CreateTrip(t *testing.T) {
 			Truncate(time.Second)
 		availableSeats := 1
 
-		res := sendCreateTripRequest(t, fiber.StatusOK, api.CreateTripRequest{
-			ClientID:       clientID.String(),
-			FromPoint:      fromPoint,
-			ToPoint:        toPoint,
-			DepartureTime:  departureTime.Format(time.RFC3339),
-			AvailableSeats: availableSeats,
-		})
+		res := sendCreateTripRequest(t,
+			fiber.StatusOK,
+			api.CreateTripRequest{
+				FromPoint:      fromPoint,
+				ToPoint:        toPoint,
+				DepartureTime:  departureTime.Format(time.RFC3339),
+				AvailableSeats: availableSeats,
+			},
+			withUser(clientID),
+		)
 
 		require.Empty(t, res.Errors)
 		require.NotNil(t, res.Data)
@@ -190,18 +195,6 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 			},
 		},
 		{
-			name: "пустой client_id",
-			change: func(r *api.CreateTripRequest) {
-				r.ClientID = ""
-			},
-		},
-		{
-			name: "некорректный UUID",
-			change: func(r *api.CreateTripRequest) {
-				r.ClientID = "not-a-uuid"
-			},
-		},
-		{
 			name: "пустой пункт отправления",
 			change: func(r *api.CreateTripRequest) {
 				r.FromPoint = ""
@@ -252,9 +245,9 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 			// запись, даже если тест изменяет client_id.
 			fromMarker := "Москва-" + uuid.NewString()
 			toMarker := "Владивосток-" + uuid.NewString()
+			clientId := uuid.New()
 
 			payload := api.CreateTripRequest{
-				ClientID:       uuid.NewString(),
 				FromPoint:      fromMarker,
 				ToPoint:        toMarker,
 				DepartureTime:  time.Now().Add(time.Hour).Format(time.RFC3339),
@@ -265,7 +258,7 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 			// Поэтому хотя бы одна уникальная метка сохраняется.
 			tt.change(&payload)
 
-			response := sendCreateTripRequest(t, fiber.StatusOK, payload)
+			response := sendCreateTripRequest(t, fiber.StatusOK, payload, withUser(clientId))
 
 			require.NotEmpty(t, response.Errors)
 			require.Nil(t, response.Data)

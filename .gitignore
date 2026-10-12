@@ -4,3 +4,4 @@
 .env
 bin
 deploy/logs
+http-client.private.env.json

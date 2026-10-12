@@ -87,7 +87,8 @@ func TestMain(m *testing.M) {
 	server := api.NewServer(testPool, tripService, registry)
 
 	testApp = fiber.New()
-	server.Route(testApp.Group(""))
+	testApp.Use(testAuthMiddleware)
+	server.Route(testApp.Group(""), testKeycloakClientID)
 
 	code := m.Run()
 

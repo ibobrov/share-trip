@@ -7,14 +7,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
+	"github.com/ibobrov/share_trip/internal/observability/middleware"
 	"github.com/ibobrov/share_trip/internal/service"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
 
 type PublishTripRequest struct {
-	TripID   string `json:"trip_id" valid:"required,uuid"`
-	ClientID string `json:"client_id" valid:"required,uuid"`
+	TripID string `json:"trip_id" valid:"required,uuid"`
 }
 
 type PublishTripResponse struct {
@@ -29,9 +29,16 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 
 	c.Set("trace-id", span.SpanContext().TraceID().String())
 
+	claims, err := middleware.ClaimsFromContext(c)
+	if err != nil {
+		return err
+	}
+	sub := claims.Subject
+
 	logger := logctx.Logger(ctx).With(
 		slog.String("server", "TripServer"),
 		slog.String("handler", "PublishTrip"),
+		slog.String("client_id", sub),
 	)
 
 	var req PublishTripRequest
@@ -42,11 +49,7 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 
 	span.SetAttributes(
 		attribute.String("trip_id", req.TripID),
-		attribute.String("client_id", req.ClientID),
-	)
-
-	logger = logger.With(
-		slog.String("client_id", req.ClientID),
+		attribute.String("client_id", sub),
 	)
 
 	logger.Info("publish trip request accepted")
@@ -56,7 +59,7 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 		return fmt.Errorf("when parse tripID: %w", err)
 	}
 
-	clientID, err := uuid.Parse(req.ClientID)
+	clientID, err := uuid.Parse(sub)
 	if err != nil {
 		return fmt.Errorf("when parse clientID: %w", err)
 	}

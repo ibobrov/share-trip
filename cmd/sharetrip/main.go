@@ -94,7 +94,16 @@ func main() {
 	application.Use(middleware.Correlation(logger))
 	application.Use(api.NewHTTPMetricsMiddleware(tripMetrics))
 
-	server.Route(application.Group(""))
+	keycloakClientID := config.Env("KEYCLOAK_CLIENT_ID", "sharetrip-api")
+	application.Use(middleware.KeycloakRefreshTokenMiddleware(
+		middleware.KeycloakConfig{
+			Issuer:       config.Env("KEYCLOAK_ISSUER", "http://localhost:8087/realms/sharetrip"),
+			ClientID:     keycloakClientID,
+			ClientSecret: config.Env("KEYCLOAK_CLIENT_SECRET", "secret"),
+		},
+	))
+
+	server.Route(application.Group(""), keycloakClientID)
 	httpPort := config.Env("HTTP_PORT", "8080")
 	if err := application.Listen(":" + httpPort); err != nil {
 		log.Fatalf("application.Listen: %v", err)

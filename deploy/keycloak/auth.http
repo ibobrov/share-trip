@@ -1,0 +1,16 @@
+### Get access token
+
+# curl --request POST
+#  --url http://localhost:8087/realms/sharetrip/protocol/openid-connect/token
+#  --header 'Content-Type: application/x-www-form-urlencoded'
+#  --data 'client_id=sharetrip-api'
+#  --data 'client_secret=ТВОЙ_CLIENT_SECRET'
+#  --data 'username=ТВОЙ_USERNAME'
+#  --data 'password=ТВОЙ_PASSWORD'
+#  --data 'grant_type=password'
+POST http://localhost:8087/realms/sharetrip/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+client_id=sharetrip-api&client_secret={{CLIENT_SECRET}}&username={{USER_NAME}}&password={{USER_PASSWORD}}&grant_type=password
+
+###

@@ -16,6 +16,7 @@ func sendJSONRequest[T any](
 	url string,
 	payload any,
 	expectedStatus int,
+	options ...requestOption,
 ) T {
 	t.Helper()
 
@@ -35,6 +36,10 @@ func sendJSONRequest[T any](
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
+
+	for _, option := range options {
+		option(req)
+	}
 
 	resp, err := testApp.Test(req, -1)
 	require.NoError(t, err)

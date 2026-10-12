@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
+	"github.com/ibobrov/share_trip/internal/observability/middleware"
 	"github.com/ibobrov/share_trip/internal/service"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -31,9 +32,16 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 
 	c.Set("trace-id", span.SpanContext().TraceID().String())
 
+	claims, err := middleware.ClaimsFromContext(c)
+	if err != nil {
+		return err
+	}
+	sub := claims.Subject
+
 	logger := logctx.Logger(ctx).With(
 		slog.String("server", "TripServer"),
 		slog.String("handler", "GetTrip"),
+		slog.String("client_id", sub),
 	)
 	logger.Info("get trip request accepted")
 

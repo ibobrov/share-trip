@@ -22,6 +22,7 @@ func sendGetTripRequest(
 	t *testing.T,
 	expectedStatus int,
 	tripID string,
+	options ...requestOption,
 ) getTripTestResponse {
 	t.Helper()
 
@@ -31,6 +32,7 @@ func sendGetTripRequest(
 		tripTestURL+tripID,
 		nil,
 		expectedStatus,
+		options...,
 	)
 }
 
@@ -45,18 +47,22 @@ func TestServer_GetTrip(t *testing.T) {
 			Add(time.Hour).
 			Truncate(time.Second)
 
-		created := sendCreateTripRequest(t, fiber.StatusOK, api.CreateTripRequest{
-			ClientID:       clientID.String(),
-			FromPoint:      "Москва",
-			ToPoint:        "Коломна",
-			DepartureTime:  departureTime.Format(time.RFC3339),
-			AvailableSeats: 2,
-		})
+		created := sendCreateTripRequest(
+			t,
+			fiber.StatusOK,
+			api.CreateTripRequest{
+				FromPoint:      "Москва",
+				ToPoint:        "Коломна",
+				DepartureTime:  departureTime.Format(time.RFC3339),
+				AvailableSeats: 2,
+			},
+			withUser(clientID),
+		)
 
 		require.Empty(t, created.Errors)
 		require.NotNil(t, created.Data)
 
-		response := sendGetTripRequest(t, fiber.StatusOK, created.Data.ID.String())
+		response := sendGetTripRequest(t, fiber.StatusOK, created.Data.ID.String(), withUser(clientID))
 
 		require.Empty(t, response.Errors)
 		require.NotNil(t, response.Data)
@@ -89,7 +95,7 @@ func TestServer_GetTrip(t *testing.T) {
 
 	t.Run("несуществующая поездка", func(t *testing.T) {
 		t.Parallel()
-		response := sendGetTripRequest(t, fiber.StatusNotFound, uuid.NewString())
+		response := sendGetTripRequest(t, fiber.StatusNotFound, uuid.NewString(), withUser(uuid.New()))
 
 		require.Nil(t, response.Data)
 		require.NotEmpty(t, response.Errors)
@@ -124,7 +130,7 @@ func TestServer_GetTrip_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			response := sendGetTripRequest(t, fiber.StatusOK, tt.id)
+			response := sendGetTripRequest(t, fiber.StatusOK, tt.id, withUser(uuid.New()))
 
 			require.Nil(t, response.Data)
 			require.Equal(
