@@ -5,8 +5,9 @@ import (
 )
 
 var (
-	ErrDomain    = errors.New("domain error")
-	ErrNotFound  = errors.New("not found entity")
-	ErrForbidden = errors.New("forbidden")
-	ErrConflict  = errors.New("conflict")
+	ErrDomain                 = errors.New("domain error")
+	ErrNotFound               = errors.New("not found entity")
+	ErrForbidden              = errors.New("forbidden")
+	ErrConflict               = errors.New("conflict")
+	ErrTripIsAlreadyPublished = errors.New("trip already published")
 )

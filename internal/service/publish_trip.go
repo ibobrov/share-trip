@@ -64,25 +64,20 @@ func (s *TripService) PublishTrip(
 				return nil, fmt.Errorf("usecase.MoveTripDraftToPublish: %w", err)
 			}
 
-			if !res.IsAlreadyPublished {
-				err = s.tripUseCase.SentNotificationTripPublish(ctx, tx, domain.SentNotificationTripPublishRequest{
-					TripID: req.TripID,
-				})
+			err = s.tripUseCase.SentNotificationTripPublish(ctx, tx, domain.SentNotificationTripPublishRequest{
+				TripID: req.TripID,
+			})
 
-				if err != nil {
-					logger.Error(
-						"sent notification trip publish usecase failed",
-						slog.String("layer", "transaction"),
-						slog.Any("error", err),
-					)
-					return nil, fmt.Errorf("usecase.SentNotificationTripPublish: %w", err)
-				}
+			if err != nil {
+				logger.Error(
+					"sent notification trip publish usecase failed",
+					slog.String("layer", "transaction"),
+					slog.Any("error", err),
+				)
+				return nil, fmt.Errorf("usecase.SentNotificationTripPublish: %w", err)
 			}
 
-			return &PublishTripResponse{
-				TripID:             res.TripID,
-				IsAlreadyPublished: res.IsAlreadyPublished,
-			}, nil
+			return &PublishTripResponse{TripID: res.TripID}, nil
 		},
 	)
 
@@ -90,6 +85,8 @@ func (s *TripService) PublishTrip(
 		switch {
 		case errors.Is(err, domain.ErrConflict) || errors.Is(err, domain.ErrForbidden):
 			metricRsl = "conflict"
+		case errors.Is(err, domain.ErrTripIsAlreadyPublished):
+			metricRsl = "already_published"
 		default:
 			metricRsl = "internal_error"
 		}

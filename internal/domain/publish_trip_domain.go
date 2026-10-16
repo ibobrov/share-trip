@@ -18,8 +18,7 @@ type PublishTripRequest struct {
 }
 
 type PublishTripResponse struct {
-	TripID             uuid.UUID
-	IsAlreadyPublished bool
+	TripID uuid.UUID
 }
 
 func (u *TripUseCase) MoveTripDraftToPublish(
@@ -47,7 +46,7 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 
 	// Повторный запрос успешен, но новых истории и события не создаёт.
 	if trip.Status == string(TripStatusPublished) {
-		return &PublishTripResponse{TripID: trip.ID, IsAlreadyPublished: true}, nil
+		return nil, ErrTripIsAlreadyPublished
 	}
 
 	if trip.Status != string(TripStatusDraft) {
@@ -79,8 +78,5 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 		return nil, fmt.Errorf("tripHistoryRepo.CreateTripHistory: %w", err)
 	}
 
-	return &PublishTripResponse{
-		TripID:             trip.ID,
-		IsAlreadyPublished: false,
-	}, nil
+	return &PublishTripResponse{TripID: trip.ID}, nil
 }

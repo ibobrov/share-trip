@@ -1,11 +1,13 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/ibobrov/share_trip/internal/observability/middleware"
 	"github.com/ibobrov/share_trip/internal/service"
@@ -70,16 +72,16 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
+		if errors.Is(err, domain.ErrTripIsAlreadyPublished) {
+			return Success(c, PublishTripResponse{TripID: tripID})
+		}
+
 		return HandleError(c, func() {
 			logger.Error(
 				"publish trip failed",
 				slog.Any("error", err),
 			)
 		}, err)
-	}
-
-	if res.IsAlreadyPublished {
-		return Success(c, PublishTripResponse{TripID: res.TripID})
 	}
 
 	return SuccessWithHttpStatus(c, fiber.StatusCreated, PublishTripResponse{TripID: res.TripID})
