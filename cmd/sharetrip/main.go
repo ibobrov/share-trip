@@ -53,10 +53,10 @@ func main() {
 
 	dbConfig := repository.Config{
 		Host:     config.Env("DB_HOST", "localhost"),
-		Port:     config.EnvInt("DB_PORT", 6543),
-		User:     config.Env("DB_USER", "postgres"),
-		Password: config.Env("DB_PASSWORD", "password"),
-		DBName:   config.Env("DB_NAME", "sharetrip"),
+		Port:     config.EnvInt("POSTGRES_PORT", 6543),
+		User:     config.Env("POSTGRES_USER", "postgres"),
+		Password: config.Env("POSTGRES_PASSWORD", "password"),
+		DBName:   config.Env("POSTGRES_DB", "sharetrip"),
 		SSLMode:  config.Env("DB_SSLMODE", "disable"),
 	}
 
