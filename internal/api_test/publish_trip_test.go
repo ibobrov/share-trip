@@ -22,6 +22,7 @@ type publishTripTestResponse struct {
 
 type publishTripDBState struct {
 	Status       string
+	CompanyID    string
 	HistoryCount int
 	EventCount   int
 }
@@ -85,6 +86,7 @@ func readPublishTripState(
 		`
 			SELECT
 				t.status,
+				t.company_id,
 				(SELECT count(*)
 				 FROM trip_history
 				 WHERE trip_id = t.id),
@@ -97,6 +99,7 @@ func readPublishTripState(
 		tripID,
 	).Scan(
 		&state.Status,
+		&state.CompanyID,
 		&state.HistoryCount,
 		&state.EventCount,
 	)
@@ -150,6 +153,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		after := readPublishTripState(t, trip.ID)
 
 		require.Equal(t, string(domain.TripStatusPublished), after.Status)
+		require.Equal(t, trip.CompanyID, after.CompanyID)
 		require.Equal(t, before.HistoryCount+1, after.HistoryCount)
 		require.Equal(t, before.EventCount+1, after.EventCount)
 

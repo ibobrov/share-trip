@@ -42,6 +42,7 @@ func TestServer_GetTrip(t *testing.T) {
 	t.Run("получение существующей поездки", func(t *testing.T) {
 		t.Parallel()
 		clientID := uuid.New()
+		companyID := "company-" + uuid.NewString()
 		departureTime := time.Now().
 			UTC().
 			Add(time.Hour).
@@ -57,12 +58,13 @@ func TestServer_GetTrip(t *testing.T) {
 				AvailableSeats: 2,
 			},
 			withUser(clientID),
+			withCompany(companyID),
 		)
 
 		require.Empty(t, created.Errors)
 		require.NotNil(t, created.Data)
 
-		response := sendGetTripRequest(t, fiber.StatusOK, created.Data.ID.String(), withUser(clientID))
+		response := sendGetTripRequest(t, fiber.StatusOK, created.Data.ID.String(), withUser(clientID), withCompany(companyID))
 
 		require.Empty(t, response.Errors)
 		require.NotNil(t, response.Data)
@@ -71,6 +73,7 @@ func TestServer_GetTrip(t *testing.T) {
 
 		require.Equal(t, created.Data.ID, got.ID)
 		require.Equal(t, clientID, got.ClientID)
+		require.Equal(t, companyID, got.CompanyID)
 		require.Equal(t, "Москва", got.FromPoint)
 		require.Equal(t, "Коломна", got.ToPoint)
 		require.True(

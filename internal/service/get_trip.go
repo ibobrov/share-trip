@@ -20,6 +20,7 @@ type GetTripRequest struct {
 type GetTripResponse struct {
 	ID             uuid.UUID
 	ClientID       uuid.UUID
+	CompanyID      string
 	FromPoint      string
 	ToPoint        string
 	DepartureTime  time.Time
@@ -60,6 +61,7 @@ func (s *TripService) GetTripByIdRequest(
 			return &GetTripResponse{
 				ID:             res.ID,
 				ClientID:       res.ClientID,
+				CompanyID:      res.CompanyID,
 				FromPoint:      res.FromPoint,
 				ToPoint:        res.ToPoint,
 				DepartureTime:  res.DepartureTime,

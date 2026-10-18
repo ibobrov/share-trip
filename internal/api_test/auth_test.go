@@ -12,6 +12,7 @@ const (
 	testKeycloakClientID = "sharetrip-api"
 	testUserHeader       = "X-Test-User-ID"
 	testRoleHeader       = "X-Test-Role"
+	testCompanyHeader    = "X-Test-Company-ID"
 )
 
 // Используется только в тестовом приложении.
@@ -30,7 +31,8 @@ func testAuthMiddleware(c *fiber.Ctx) error {
 	}
 
 	claims := &middleware.KeycloakClaims{
-		Subject: subject,
+		Subject:   subject,
+		CompanyID: c.Get(testCompanyHeader),
 		ResourceAccess: map[string]struct {
 			Roles []string `json:"roles"`
 		}{
@@ -49,5 +51,12 @@ func withUser(clientID uuid.UUID) requestOption {
 	return func(req *http.Request) {
 		req.Header.Set(testUserHeader, clientID.String())
 		req.Header.Set(testRoleHeader, "client")
+		req.Header.Set(testCompanyHeader, "company-"+clientID.String())
+	}
+}
+
+func withCompany(companyID string) requestOption {
+	return func(req *http.Request) {
+		req.Header.Set(testCompanyHeader, companyID)
 	}
 }

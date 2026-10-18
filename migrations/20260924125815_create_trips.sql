@@ -4,6 +4,7 @@ CREATE TABLE trips
 (
     id             UUID PRIMARY KEY,
     client_id      UUID        NOT NULL,
+    company_id     TEXT        NOT NULL,
     from_point     TEXT        NOT NULL,
     to_point       TEXT        NOT NULL,
     departure_time TIMESTAMPTZ NOT NULL,

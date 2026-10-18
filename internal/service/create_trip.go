@@ -15,6 +15,7 @@ import (
 
 type CreateTripRequest struct {
 	ClientID       uuid.UUID
+	CompanyID      string
 	FromPoint      string
 	ToPoint        string
 	DepartureTime  time.Time
@@ -24,6 +25,7 @@ type CreateTripRequest struct {
 type CreateTripResponse struct {
 	ID             uuid.UUID
 	ClientID       uuid.UUID
+	CompanyID      string
 	FromPoint      string
 	ToPoint        string
 	DepartureTime  time.Time
@@ -34,13 +36,13 @@ type CreateTripResponse struct {
 
 func (s *TripService) CreateTrip(
 	ctx context.Context,
-	request CreateTripRequest,
+	req CreateTripRequest,
 ) (CreateTripResponse, error) {
 
 	logger := logctx.Logger(ctx).With(
 		slog.String("service", "TripService"),
 		slog.String("operation", "CreateTrip"),
-		slog.String("client_id", request.ClientID.String()),
+		slog.String("client_id", req.ClientID.String()),
 		slog.String("layer", "service"),
 	)
 
@@ -55,13 +57,24 @@ func (s *TripService) CreateTrip(
 			Observe(time.Since(started).Seconds())
 	}()
 
+	option, err := s.contractClient.CheckOption(ctx, req.CompanyID, "trip_creation")
+	if err != nil {
+		metricRsl = "internal_error"
+		return CreateTripResponse{}, fmt.Errorf("check trip_creation availability: %w", err)
+	}
+	if !option.Allowed {
+		metricRsl = "forbidden"
+		return CreateTripResponse{}, fmt.Errorf("%w: trip_creation is unavailable: %s", domain.ErrForbidden, option.Reason)
+	}
+
 	result, err := tx(ctx, s.pool, func(tx pgx.Tx) (*CreateTripResponse, error) {
 		res, err := s.tripUseCase.CreateTrip(ctx, tx, domain.CreateTripRequest{
-			ClientID:      request.ClientID,
-			FromPoint:     request.FromPoint,
-			ToPoint:       request.ToPoint,
-			DepartureTime: request.DepartureTime,
-			Seats:         request.AvailableSeats,
+			ClientID:      req.ClientID,
+			CompanyID:     req.CompanyID,
+			FromPoint:     req.FromPoint,
+			ToPoint:       req.ToPoint,
+			DepartureTime: req.DepartureTime,
+			Seats:         req.AvailableSeats,
 		})
 
 		if err != nil {
@@ -82,6 +95,7 @@ func (s *TripService) CreateTrip(
 		return &CreateTripResponse{
 			ID:             res.ID,
 			ClientID:       res.ClientID,
+			CompanyID:      res.CompanyID,
 			FromPoint:      res.FromPoint,
 			ToPoint:        res.ToPoint,
 			DepartureTime:  res.DepartureTime,

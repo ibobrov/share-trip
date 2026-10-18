@@ -21,6 +21,7 @@ type TripRepository struct {
 type CreateTripRequest struct {
 	ID            uuid.UUID
 	ClientID      uuid.UUID
+	CompanyID     string
 	FromPoint     string
 	ToPoint       string
 	DepartureTime time.Time
@@ -66,11 +67,12 @@ func (r *TripRepository) CreateTrip(
 
 	_, err := tx.Exec(ctx,
 		`
-			INSERT INTO trips (id, client_id, from_point, to_point, departure_time, seats, status, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO trips (id, client_id, company_id, from_point, to_point, departure_time, seats, status, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		`,
 		req.ID,
 		req.ClientID,
+		req.CompanyID,
 		req.FromPoint,
 		req.ToPoint,
 		req.DepartureTime,
@@ -117,10 +119,10 @@ func (r *TripRepository) UpdateTrip(
 	result, err := tx.Exec(ctx,
 		`
 			UPDATE trips
-			SET client_id = $2, from_point = $3, to_point = $4, departure_time = $5, seats = $6, status = $7
+			SET client_id = $2, company_id = $3, from_point = $4, to_point = $5, departure_time = $6, seats = $7, status = $8
 			WHERE id = $1
 		`,
-		trip.ID, trip.ClientID, trip.FromPoint, trip.ToPoint, trip.DepartureTime, trip.Seats, trip.Status,
+		trip.ID, trip.ClientID, trip.CompanyID, trip.FromPoint, trip.ToPoint, trip.DepartureTime, trip.Seats, trip.Status,
 	)
 
 	if err != nil {
@@ -163,7 +165,7 @@ func (r *TripRepository) GetTripByID(
 	err := tx.QueryRow(
 		ctx,
 		`
-			SELECT id, client_id, from_point, to_point, departure_time, seats, status, created_at
+			SELECT id, client_id, company_id, from_point, to_point, departure_time, seats, status, created_at
 			FROM trips
 			WHERE id = $1
 		`,
@@ -171,6 +173,7 @@ func (r *TripRepository) GetTripByID(
 	).Scan(
 		&trip.ID,
 		&trip.ClientID,
+		&trip.CompanyID,
 		&trip.FromPoint,
 		&trip.ToPoint,
 		&trip.DepartureTime,
@@ -215,6 +218,7 @@ func (r *TripRepository) GetTripForUpdateByID(
 		SELECT
 			id,
 			client_id,
+			company_id,
 			from_point,
 			to_point,
 			departure_time,
@@ -226,6 +230,7 @@ func (r *TripRepository) GetTripForUpdateByID(
 	`, id).Scan(
 		&trip.ID,
 		&trip.ClientID,
+		&trip.CompanyID,
 		&trip.FromPoint,
 		&trip.ToPoint,
 		&trip.DepartureTime,

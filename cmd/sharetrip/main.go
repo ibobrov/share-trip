@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ibobrov/share_trip/internal/api"
 	"github.com/ibobrov/share_trip/internal/app"
+	"github.com/ibobrov/share_trip/internal/clients/contract"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/metrics"
 	"github.com/ibobrov/share_trip/internal/observability/middleware"
@@ -73,7 +75,14 @@ func main() {
 	tripHistoryRepo := repository.NewTripHistoryRepository()
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
-	tripService := service.NewTripService(pool, tripUseCase, tripMetrics)
+	contractClient, err := contract.NewClient(
+		config.Env("CONTRACT_SERVICE_URL", "http://localhost:4002"),
+		&http.Client{Timeout: contract.RequestTimeout},
+	)
+	if err != nil {
+		log.Fatalf("contract.NewClient: %v", err)
+	}
+	tripService := service.NewTripService(pool, tripUseCase, tripMetrics, contractClient)
 	server := api.NewServer(pool, tripService, registry)
 
 	application := fiber.New(fiber.Config{

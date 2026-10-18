@@ -5,6 +5,12 @@ ifeq ($(OS),Windows_NT)
 EXE := .exe
 endif
 
+ifeq ($(OS),Windows_NT)
+make-dir = powershell.exe -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(1)' | Out-Null"
+else
+make-dir = mkdir -p "$(1)"
+endif
+
 export GOBIN := $(CURDIR)/.tools
 
 LINT_VERSION := v2.11.3
@@ -17,8 +23,12 @@ COMPOSE := docker compose --env-file .env -f deploy/docker-compose.yml
 
 REPORTS := .reports
 
-.PHONY: help deps tidy fmt lint test build run up down migrate-up migrate-down
-.PHONY: migrate-status migrate-create lint-install coverage coverage-html reports-dir
+OAPI_CODEGEN_VERSION := v2.8.0
+CONTRACT_OPENAPI_URL ?= http://localhost:4002/api/contract.yaml
+CONTRACT_CLIENT_DIR := internal/clients/contract
+
+.PHONY: help deps tidy fmt lint test build run up down migrate-up migrate-down migrate-status
+.PHONY: migrate-create lint-install coverage coverage-html generate-contract-client
 
 help:
 	@echo Available commands:
@@ -87,16 +97,15 @@ lint-install:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(LINT_VERSION)
 	"$(LINT)" version
 
-coverage: reports-dir
+coverage:
+	$(call make-dir,$(REPORTS))
 	go test -count=1 -timeout=5m -coverpkg=./... -covermode=atomic -coverprofile="$(REPORTS)/coverage.out" ./...
 	go tool cover -func="$(REPORTS)/coverage.out"
 
 coverage-html: coverage
 	go tool cover -html="$(REPORTS)/coverage.out" -o "$(REPORTS)/coverage.html"
 
-reports-dir:
-ifeq ($(OS),Windows_NT)
-	powershell.exe -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(REPORTS)' | Out-Null"
-else
-	mkdir -p "$(REPORTS)"
-endif
+generate-contract-client:
+	$(call make-dir,$(CONTRACT_CLIENT_DIR)/gen)
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) -generate types,client -response-type-suffix ClientResponse -package contractgen -o "$(CONTRACT_CLIENT_DIR)/gen/client.gen.go" "$(CONTRACT_OPENAPI_URL)"
+	go mod tidy

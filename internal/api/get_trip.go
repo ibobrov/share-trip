@@ -16,6 +16,7 @@ import (
 type GetTripResponse struct {
 	ID             uuid.UUID `json:"id"`
 	ClientID       uuid.UUID `json:"client_id"`
+	CompanyID      string    `json:"company_id"`
 	FromPoint      string    `json:"from_point"`
 	ToPoint        string    `json:"to_point"`
 	DepartureTime  time.Time `json:"departure_time"`
@@ -66,6 +67,7 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 	return Success(c, GetTripResponse{
 		ID:             res.ID,
 		ClientID:       res.ClientID,
+		CompanyID:      res.CompanyID,
 		FromPoint:      res.FromPoint,
 		ToPoint:        res.ToPoint,
 		DepartureTime:  res.DepartureTime,

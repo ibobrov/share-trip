@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,6 +23,7 @@ type CreateTripRequest struct {
 type CreateTripResponse struct {
 	ID             uuid.UUID `json:"id"`
 	ClientID       uuid.UUID `json:"client_id"`
+	CompanyID      string    `json:"company_id"`
 	FromPoint      string    `json:"from_point"`
 	ToPoint        string    `json:"to_point"`
 	DepartureTime  time.Time `json:"departure_time"`
@@ -38,6 +40,10 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		return err
 	}
 	sub := claims.Subject
+	companyID := claims.CompanyID
+	if strings.TrimSpace(companyID) == "" {
+		return FailureWithHttpStatus(c, fiber.StatusForbidden, "company_id is required in token")
+	}
 
 	clientID, err := uuid.Parse(sub)
 	if err != nil {
@@ -64,6 +70,7 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 
 	res, err := s.tripService.CreateTrip(ctx, service.CreateTripRequest{
 		ClientID:       clientID,
+		CompanyID:      companyID,
 		FromPoint:      req.FromPoint,
 		ToPoint:        req.ToPoint,
 		DepartureTime:  departureTime,
@@ -81,6 +88,7 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	return Success(c, CreateTripResponse{
 		ID:             res.ID,
 		ClientID:       res.ClientID,
+		CompanyID:      res.CompanyID,
 		FromPoint:      res.FromPoint,
 		ToPoint:        res.ToPoint,
 		DepartureTime:  res.DepartureTime,

@@ -1,0 +1,93 @@
+@startuml
+title Создание заявки с проверкой доступности услуги
+
+hide footbox
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 65
+
+actor "Клиент" as client
+
+box "ShareTrip" #ADD8E6
+    participant "HTTP API" as tripAPI
+    participant "Service layer" as tripService
+    database "trips db" as tripsDB
+end box
+
+box "Contract Service" #90EE90
+    participant "HTTP API" as contractAPI
+    participant "Service layer" as contractService
+    database "contracts db" as contractsDB
+end box
+
+client -> tripAPI: POST /api/trip/create + token
+tripAPI -> tripAPI: Извлечь client_id и company_id из токена\nТранспортная валидация запроса
+note left of tripAPI
+    Нет company_id → 403.
+    Некорректный запрос → 400.
+    Дальнейшие вызовы не выполняются.
+end note
+
+tripAPI -> tripService: CreateTrip(request, companyID)
+tripService -> contractAPI: REST POST /api/option/check\ncompany_id, option_code="trip_creation"
+
+note over tripService, contractAPI
+    Только HTTP 500: один повтор через 100 мс.
+    Одна попытка ≤ 500 мс; вся проверка ≤ 1,2 с.
+    Остальные статусы, сетевые ошибки и таймауты не повторяются.
+    Отмена контекста прерывает ожидание повтора.
+end note
+
+contractAPI -> contractService: CheckOption(companyID, "trip_creation")
+contractService -> contractsDB: Найти активный договор и услугу
+contractsDB --> contractService: Статус, сроки, enabled
+contractService -> contractService: Проверить срок договора\nи доступность услуги
+
+alt Услуга доступна
+    contractService --> contractAPI: allowed=true
+    contractAPI --> tripService: 200 · data.allowed=true
+
+    tripService -> tripsDB: BEGIN
+    tripService -> tripService: Бизнес-валидация заявки
+    note right of tripService
+        Доменный слой проверяет время отправления
+        и количество мест; на схеме показан укрупнённо.
+    end note
+    tripService -> tripsDB: INSERT trips\nstatus=draft, company_id
+    tripService -> tripsDB: INSERT trip_history\nto_status=draft
+    tripService -> tripsDB: COMMIT
+    tripsDB --> tripService: OK
+
+    tripService --> tripAPI: Созданная заявка
+    tripAPI --> client: 200 OK\n{"data": заявка, "errors": []}
+
+else Услуга недоступна
+    contractService --> contractAPI: allowed=false, reason
+    contractAPI --> tripService: 200 · data.allowed=false, reason
+    tripService --> tripAPI: Доступ запрещён, причина отказа
+    tripAPI --> client: 403 Forbidden\n{"data": null, "errors": [причина]}
+
+else Ошибка Contract Service или таймаут
+    contractAPI --> tripService: HTTP 500 после повтора / другая ошибка
+    note over tripService, contractAPI
+        При сетевой ошибке или таймауте HTTP-ответа
+        может не быть: ошибку возвращает HTTP-клиент.
+    end note
+    tripService --> tripAPI: Не удалось проверить доступ
+    tripAPI --> client: 500 Internal Server Error\n{"data": null, "errors": [ошибка]}
+end
+
+note over tripService, tripsDB
+    Отказ или ошибка проверки доступа: транзакция не открывается.
+    Бизнес-ошибка внутри транзакции → ROLLBACK и 400.
+    Ошибка БД → ROLLBACK и 500.
+    Ветки отката сокращены.
+end note
+
+note over tripAPI, tripsDB
+    Общий лимит обработчика — 2 с.
+    После проверки доступа остаётся около 800 мс на работу с БД.
+end note
+
+@enduml

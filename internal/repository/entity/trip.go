@@ -9,6 +9,7 @@ import (
 type Trip struct {
 	ID            uuid.UUID
 	ClientID      uuid.UUID
+	CompanyID     string
 	FromPoint     string
 	ToPoint       string
 	DepartureTime time.Time

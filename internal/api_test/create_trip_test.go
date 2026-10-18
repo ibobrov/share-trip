@@ -42,6 +42,7 @@ func TestServer_CreateTrip(t *testing.T) {
 		t.Parallel()
 
 		clientID := uuid.New()
+		companyID := "company-" + uuid.NewString()
 		fromPoint := "Москва"
 		toPoint := "Владивосток"
 		departureTime := time.Now().
@@ -59,6 +60,7 @@ func TestServer_CreateTrip(t *testing.T) {
 				AvailableSeats: availableSeats,
 			},
 			withUser(clientID),
+			withCompany(companyID),
 		)
 
 		require.Empty(t, res.Errors)
@@ -68,6 +70,7 @@ func TestServer_CreateTrip(t *testing.T) {
 
 		require.NotEqual(t, uuid.Nil, got.ID)
 		require.Equal(t, clientID, got.ClientID)
+		require.Equal(t, companyID, got.CompanyID)
 		require.Equal(t, fromPoint, got.FromPoint)
 		require.Equal(t, toPoint, got.ToPoint)
 		require.True(
@@ -86,6 +89,7 @@ func TestServer_CreateTrip(t *testing.T) {
 		// Проверяем фактическое сохранение поездки.
 		var (
 			savedClientID      uuid.UUID
+			savedCompanyID     string
 			savedFromPoint     string
 			savedToPoint       string
 			savedDepartureTime time.Time
@@ -98,6 +102,7 @@ func TestServer_CreateTrip(t *testing.T) {
 			`
 				SELECT
 					client_id,
+					company_id,
 					from_point,
 					to_point,
 					departure_time,
@@ -109,6 +114,7 @@ func TestServer_CreateTrip(t *testing.T) {
 			got.ID,
 		).Scan(
 			&savedClientID,
+			&savedCompanyID,
 			&savedFromPoint,
 			&savedToPoint,
 			&savedDepartureTime,
@@ -118,6 +124,7 @@ func TestServer_CreateTrip(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, clientID, savedClientID)
+		require.Equal(t, companyID, savedCompanyID)
 		require.Equal(t, fromPoint, savedFromPoint)
 		require.Equal(t, toPoint, savedToPoint)
 		require.True(t, departureTime.Equal(savedDepartureTime))
@@ -291,6 +298,94 @@ func TestServer_CreateTrip_Validation(t *testing.T) {
 				count,
 				"невалидная поездка не должна сохраняться",
 			)
+		})
+	}
+}
+
+func TestServer_CreateTrip_CompanyFromToken(t *testing.T) {
+	t.Parallel()
+
+	clientID := uuid.New()
+	companyID := "company-from-token-" + uuid.NewString()
+
+	// Поле компании в HTTP-теле не должно подменять claim токена.
+	payload := struct {
+		CompanyID      string `json:"company_id"`
+		FromPoint      string `json:"from_point"`
+		ToPoint        string `json:"to_point"`
+		DepartureTime  string `json:"departure_time"`
+		AvailableSeats int    `json:"available_seats"`
+	}{
+		CompanyID:      "company-from-body",
+		FromPoint:      "Москва",
+		ToPoint:        "Коломна",
+		DepartureTime:  time.Now().UTC().Add(time.Hour).Format(time.RFC3339),
+		AvailableSeats: 1,
+	}
+
+	response := sendJSONRequest[createTripTestResponse](
+		t,
+		http.MethodPost,
+		tripTestURL+"create",
+		payload,
+		fiber.StatusOK,
+		withUser(clientID),
+		withCompany(companyID),
+	)
+
+	require.Empty(t, response.Errors)
+	require.NotNil(t, response.Data)
+	require.Equal(t, companyID, response.Data.CompanyID)
+
+	var savedCompanyID string
+	err := testPool.QueryRow(
+		context.Background(),
+		`SELECT company_id FROM trips WHERE id = $1`,
+		response.Data.ID,
+	).Scan(&savedCompanyID)
+	require.NoError(t, err)
+	require.Equal(t, companyID, savedCompanyID)
+}
+
+func TestServer_CreateTrip_MissingCompanyClaim(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		companyID string
+	}{
+		{name: "company_id отсутствует", companyID: ""},
+		{name: "company_id содержит только пробелы", companyID: "   "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fromPoint := "Москва-" + uuid.NewString()
+			response := sendCreateTripRequest(t,
+				fiber.StatusForbidden,
+				api.CreateTripRequest{
+					FromPoint:      fromPoint,
+					ToPoint:        "Коломна",
+					DepartureTime:  time.Now().UTC().Add(time.Hour).Format(time.RFC3339),
+					AvailableSeats: 1,
+				},
+				withUser(uuid.New()),
+				withCompany(tt.companyID),
+			)
+
+			require.Nil(t, response.Data)
+			require.Equal(t, []string{"company_id is required in token"}, response.Errors)
+
+			var tripCount int
+			err := testPool.QueryRow(
+				context.Background(),
+				`SELECT count(*) FROM trips WHERE from_point = $1`,
+				fromPoint,
+			).Scan(&tripCount)
+			require.NoError(t, err)
+			require.Zero(t, tripCount, "без компании в токене поездка не должна сохраняться")
 		})
 	}
 }

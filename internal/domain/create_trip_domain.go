@@ -15,6 +15,7 @@ import (
 
 type CreateTripRequest struct {
 	ClientID      uuid.UUID
+	CompanyID     string
 	FromPoint     string
 	ToPoint       string
 	DepartureTime time.Time
@@ -24,6 +25,7 @@ type CreateTripRequest struct {
 type CreateTripResponse struct {
 	ID            uuid.UUID
 	ClientID      uuid.UUID
+	CompanyID     string
 	FromPoint     string
 	ToPoint       string
 	DepartureTime time.Time
@@ -54,6 +56,7 @@ func (u *TripUseCase) CreateTrip(
 	repoReq := repository.CreateTripRequest{
 		ID:            uuid.New(),
 		ClientID:      req.ClientID,
+		CompanyID:     req.CompanyID,
 		FromPoint:     req.FromPoint,
 		ToPoint:       req.ToPoint,
 		DepartureTime: req.DepartureTime,
@@ -92,6 +95,7 @@ func (u *TripUseCase) CreateTrip(
 	return &CreateTripResponse{
 		ID:            repoReq.ID,
 		ClientID:      repoReq.ClientID,
+		CompanyID:     repoReq.CompanyID,
 		FromPoint:     repoReq.FromPoint,
 		ToPoint:       repoReq.ToPoint,
 		DepartureTime: repoReq.DepartureTime,

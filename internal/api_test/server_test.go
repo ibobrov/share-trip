@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/ibobrov/share_trip/internal/clients/contract"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/metrics"
 	"github.com/ibobrov/share_trip/internal/repository"
@@ -83,7 +85,12 @@ func TestMain(m *testing.M) {
 	tripHistoryRepo := repository.NewTripHistoryRepository()
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
-	tripService := service.NewTripService(testPool, tripUseCase, tripMetrics)
+	contractServer := newContractTestServer()
+	contractClient, err := contract.NewClient(contractServer.URL, &http.Client{Timeout: time.Second})
+	if err != nil {
+		log.Fatalf("create contract client: %v", err)
+	}
+	tripService := service.NewTripService(testPool, tripUseCase, tripMetrics, contractClient)
 	server := api.NewServer(testPool, tripService, registry)
 
 	testApp = fiber.New()
@@ -91,6 +98,7 @@ func TestMain(m *testing.M) {
 	server.Route(testApp.Group(""), testKeycloakClientID)
 
 	code := m.Run()
+	contractServer.Close()
 
 	if testPool != nil {
 		testPool.Close()

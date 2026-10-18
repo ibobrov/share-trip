@@ -30,6 +30,7 @@ type KeycloakConfig struct {
 
 type KeycloakClaims struct {
 	Subject           string `json:"sub"`
+	CompanyID         string `json:"company_id"`
 	PreferredUsername string `json:"preferred_username"`
 	Email             string `json:"email"`
 	AuthorizedParty   string `json:"azp"`
