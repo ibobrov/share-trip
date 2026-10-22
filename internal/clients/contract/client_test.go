@@ -9,8 +9,44 @@ import (
 	"testing"
 
 	contractgen "github.com/ibobrov/share_trip/internal/clients/contract/gen"
+	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestClient_CheckOption_Request(t *testing.T) {
+	t.Parallel()
+
+	type receivedRequest struct {
+		method      string
+		path        string
+		contentType string
+		body        string
+		err         error
+	}
+	requests := make(chan receivedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		requests <- receivedRequest{
+			method: r.Method, path: r.URL.Path,
+			contentType: r.Header.Get("Content-Type"), body: string(body), err: err,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"allowed":true},"errors":[]}`))
+	}))
+	t.Cleanup(server.Close)
+	client, err := NewClient(server.URL, server.Client())
+	require.NoError(t, err)
+
+	result, err := client.CheckOption(t.Context(), "company-acme", "trip_creation")
+	require.NoError(t, err)
+	require.True(t, result.Allowed)
+	request := <-requests
+	require.NoError(t, request.err)
+	require.Equal(t, http.MethodPost, request.method)
+	require.Equal(t, "/api/option/check", request.path)
+	require.Equal(t, "application/json", request.contentType)
+	require.JSONEq(t, `{"company_id":"company-acme","option_code":"trip_creation"}`, request.body)
+}
 
 func TestClient_CheckOption(t *testing.T) {
 	t.Parallel()
@@ -19,20 +55,20 @@ func TestClient_CheckOption(t *testing.T) {
 		name       string
 		statusCode int
 		body       string
-		want       CheckResult
+		want       service.CheckResult
 		wantError  string
 	}{
 		{
 			name:       "option is allowed without reason",
 			statusCode: http.StatusOK,
 			body:       `{"data":{"allowed":true},"errors":[]}`,
-			want:       CheckResult{Allowed: true},
+			want:       service.CheckResult{Allowed: true},
 		},
 		{
 			name:       "option is denied with reason",
 			statusCode: http.StatusOK,
 			body:       `{"data":{"allowed":false,"reason":"CONTRACT_EXPIRED"},"errors":[]}`,
-			want:       CheckResult{Allowed: false, Reason: "CONTRACT_EXPIRED"},
+			want:       service.CheckResult{Allowed: false, Reason: "CONTRACT_EXPIRED"},
 		},
 		{
 			name:       "validation error",

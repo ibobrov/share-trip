@@ -15,9 +15,11 @@ export GOBIN := $(CURDIR)/.tools
 
 LINT_VERSION := v2.11.3
 GOOSE_VERSION := v3.26.0
+MOCKGEN_VERSION := v0.6.0
 
 LINT := $(GOBIN)/golangci-lint$(EXE)
 GOOSE := $(GOBIN)/goose$(EXE)
+export MOCKGEN := $(GOBIN)/mockgen$(EXE)
 
 COMPOSE := docker compose --env-file .env -f deploy/docker-compose.yml
 
@@ -29,6 +31,7 @@ CONTRACT_CLIENT_DIR := internal/clients/contract
 
 .PHONY: help deps tidy fmt lint test build run up down migrate-up migrate-down migrate-status
 .PHONY: migrate-create lint-install coverage coverage-html generate-contract-client
+.PHONY: install-mockgen generate generate-mocks
 
 help:
 	@echo Available commands:
@@ -36,6 +39,7 @@ help:
 	@echo   make deps               - Download dependencies and install tools
 	@echo   make tidy               - Update go.mod and go.sum
 	@echo   make fmt                - Format Go code
+	@echo   make generate-mocks     - Generate service mocks
 	@echo   make lint-install       - Install golangci-lint with Go 1.26.0
 	@echo   make lint               - Run linters
 	@echo   make test               - Run all tests
@@ -50,13 +54,23 @@ help:
 	@echo   make migrate-status     - Show migration status
 	@echo   make migrate-create name=create_table - Create SQL migration
 
-deps: lint-install
+deps: lint-install install-mockgen
 	go mod download
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(LINT_VERSION)
 	go install github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION)
 
 tidy:
 	go mod tidy
+
+install-mockgen: $(MOCKGEN)
+
+$(MOCKGEN):
+	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
+
+generate: generate-mocks
+
+generate-mocks: install-mockgen
+	go generate ./internal/service
 
 fmt:
 	go fmt ./...

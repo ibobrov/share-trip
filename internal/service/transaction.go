@@ -8,12 +8,11 @@ import (
 
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func tx[T interface{}](
 	ctx context.Context,
-	pool *pgxpool.Pool,
+	pool TransactionBeginner,
 	block func(tx pgx.Tx) (*T, error),
 ) (*T, error) {
 	logger := logctx.Logger(ctx).With(

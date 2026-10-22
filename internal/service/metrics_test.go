@@ -1,54 +1,47 @@
-package service
+package service_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 
-	"github.com/ibobrov/share_trip/internal/clients/contract"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/metrics"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ibobrov/share_trip/internal/service"
+	"github.com/ibobrov/share_trip/internal/service/mocks"
+	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
-
-type contractCheckerStub struct {
-	result contract.CheckResult
-	err    error
-}
-
-func (s contractCheckerStub) CheckOption(context.Context, string, string) (contract.CheckResult, error) {
-	return s.result, s.err
-}
 
 func TestTripService_CreateTrip_Metrics(t *testing.T) {
 	t.Parallel()
 
 	contractError := errors.New("contract service unavailable")
 	tests := []struct {
-		name       string
-		checker    contractCheckerStub
-		wantResult string
-		wantError  error
+		name        string
+		checkResult service.CheckResult
+		checkError  error
+		wantResult  string
+		wantError   error
 	}{
 		{
-			name:       "contract denial is forbidden even though client returned no error",
-			checker:    contractCheckerStub{result: contract.CheckResult{Reason: "CONTRACT_EXPIRED"}},
-			wantResult: "forbidden",
-			wantError:  domain.ErrForbidden,
+			name:        "contract denial is forbidden even though client returned no error",
+			checkResult: service.CheckResult{Reason: "CONTRACT_EXPIRED"},
+			wantResult:  "forbidden",
+			wantError:   domain.ErrForbidden,
 		},
 		{
 			name:       "contract client error is internal error",
-			checker:    contractCheckerStub{err: contractError},
+			checkError: contractError,
 			wantResult: "internal_error",
 			wantError:  contractError,
 		},
 		{
-			name:       "begin transaction failure is internal error instead of success",
-			checker:    contractCheckerStub{result: contract.CheckResult{Allowed: true}},
-			wantResult: "internal_error",
+			name:        "begin transaction failure is internal error instead of success",
+			checkResult: service.CheckResult{Allowed: true},
+			wantResult:  "internal_error",
 		},
 	}
 
@@ -56,14 +49,18 @@ func TestTripService_CreateTrip_Metrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// A closed pool fails BEGIN without requiring a running database.
-			pool, err := pgxpool.New(t.Context(), "postgres://localhost/test")
-			require.NoError(t, err)
-			pool.Close()
+			ctrl := gomock.NewController(t)
+			pool := mocks.NewMockTransactionBeginner(ctrl)
+			checker := mocks.NewMockContractChecker(ctrl)
+			checker.EXPECT().CheckOption(gomock.Any(), "company-acme", "trip_creation").
+				Return(tt.checkResult, tt.checkError).Times(1)
+			if tt.checkResult.Allowed {
+				pool.EXPECT().Begin(gomock.Any()).Return(nil, errors.New("begin failed")).Times(1)
+			}
 			operationMetrics := metrics.New(prometheus.NewRegistry())
-			service := NewTripService(pool, nil, operationMetrics, tt.checker)
+			svc := service.NewTripService(pool, nil, operationMetrics, checker)
 
-			_, err = service.CreateTrip(t.Context(), CreateTripRequest{CompanyID: "company-acme"})
+			_, err := svc.CreateTrip(t.Context(), service.CreateTripRequest{CompanyID: "company-acme"})
 			require.Error(t, err)
 			if tt.wantError != nil {
 				require.ErrorIs(t, err, tt.wantError)
@@ -83,13 +80,13 @@ func TestTripService_CreateTrip_Metrics(t *testing.T) {
 func TestTripService_PublishTrip_BeginFailureMetrics(t *testing.T) {
 	t.Parallel()
 
-	pool, err := pgxpool.New(t.Context(), "postgres://localhost/test")
-	require.NoError(t, err)
-	pool.Close()
+	ctrl := gomock.NewController(t)
+	pool := mocks.NewMockTransactionBeginner(ctrl)
+	pool.EXPECT().Begin(gomock.Any()).Return(nil, pgx.ErrTxClosed).Times(1)
 	operationMetrics := metrics.New(prometheus.NewRegistry())
-	service := NewTripService(pool, nil, operationMetrics, nil)
+	svc := service.NewTripService(pool, nil, operationMetrics, nil)
 
-	_, err = service.PublishTrip(t.Context(), PublishTripRequest{})
+	_, err := svc.PublishTrip(t.Context(), service.PublishTripRequest{})
 	require.Error(t, err)
 
 	var counter dto.Metric
