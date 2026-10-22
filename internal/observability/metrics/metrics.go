@@ -14,9 +14,6 @@ type Metrics struct {
 
 	TripPublishTotal    *prometheus.CounterVec
 	TripPublishDuration *prometheus.HistogramVec
-
-	RepositoryQueryTotal    *prometheus.CounterVec
-	RepositoryQueryDuration *prometheus.HistogramVec
 }
 
 func New(reg prometheus.Registerer) *Metrics {
@@ -80,26 +77,6 @@ func New(reg prometheus.Registerer) *Metrics {
 			},
 			[]string{"result"},
 		),
-
-		RepositoryQueryTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "sharetrip",
-				Subsystem: "repository",
-				Name:      "query_total",
-				Help:      "Total number of repository queries",
-			},
-			[]string{"operation", "result"},
-		),
-		RepositoryQueryDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "sharetrip",
-				Subsystem: "repository",
-				Name:      "query_duration_seconds",
-				Help:      "Repository query duration in seconds",
-				Buckets:   prometheus.DefBuckets,
-			},
-			[]string{"operation", "result"},
-		),
 	}
 
 	reg.MustRegister(
@@ -111,8 +88,6 @@ func New(reg prometheus.Registerer) *Metrics {
 		m.TripCreateDuration,
 		m.TripPublishTotal,
 		m.TripPublishDuration,
-		m.RepositoryQueryTotal,
-		m.RepositoryQueryDuration,
 	)
 
 	return m

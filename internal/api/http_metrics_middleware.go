@@ -1,6 +1,8 @@
 package api
 
 import (
+	"errors"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -10,30 +12,29 @@ import (
 )
 
 func NewHTTPMetricsMiddleware(m *metrics.Metrics) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) (err error) {
 		started := time.Now()
 
-		err := c.Next()
+		defer func() {
+			statusCode := c.Response().StatusCode()
+			if err != nil {
+				statusCode = http.StatusInternalServerError
+				var httpError *fiber.Error
+				if errors.As(err, &httpError) {
+					statusCode = httpError.Code
+				}
+			}
+			status := strconv.Itoa(statusCode)
+			path := c.Route().Path
+			if path == "" {
+				path = c.Path()
+			}
 
-		status := strconv.Itoa(c.Response().StatusCode())
-		path := c.Route().Path
+			m.HTTPRequestTotal.WithLabelValues(c.Method(), path, status).Inc()
+			m.HTTPRequestDuration.WithLabelValues(c.Method(), path, status).
+				Observe(time.Since(started).Seconds())
+		}()
 
-		if path == "" {
-			path = c.Path()
-		}
-
-		m.HTTPRequestTotal.WithLabelValues(
-			c.Method(),
-			path,
-			status,
-		).Inc()
-
-		m.HTTPRequestDuration.WithLabelValues(
-			c.Method(),
-			path,
-			status,
-		).Observe(time.Since(started).Seconds())
-
-		return err
+		return c.Next()
 	}
 }

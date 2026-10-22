@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -27,16 +26,16 @@ type PublishTripResponse struct {
 func (s *TripService) PublishTrip(
 	ctx context.Context,
 	req PublishTripRequest,
-) (PublishTripResponse, error) {
+) (response PublishTripResponse, err error) {
 	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.PublishTrip")
 	defer span.End()
 
 	started := time.Now()
-	metricRsl := "success"
 
 	defer func() {
-		s.metrics.TripPublishTotal.WithLabelValues(metricRsl).Inc()
-		s.metrics.TripPublishDuration.WithLabelValues(metricRsl).
+		result := metricResult(err)
+		s.metrics.TripPublishTotal.WithLabelValues(result).Inc()
+		s.metrics.TripPublishDuration.WithLabelValues(result).
 			Observe(time.Since(started).Seconds())
 	}()
 
@@ -82,15 +81,6 @@ func (s *TripService) PublishTrip(
 	)
 
 	if err != nil {
-		switch {
-		case errors.Is(err, domain.ErrConflict) || errors.Is(err, domain.ErrForbidden):
-			metricRsl = "conflict"
-		case errors.Is(err, domain.ErrTripIsAlreadyPublished):
-			metricRsl = "already_published"
-		default:
-			metricRsl = "internal_error"
-		}
-
 		return PublishTripResponse{}, fmt.Errorf("tripService.PublishTrip:%w", err)
 	}
 

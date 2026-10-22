@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -37,33 +36,28 @@ type CreateTripResponse struct {
 func (s *TripService) CreateTrip(
 	ctx context.Context,
 	req CreateTripRequest,
-) (CreateTripResponse, error) {
-
+) (response CreateTripResponse, err error) {
 	logger := logctx.Logger(ctx).With(
 		slog.String("service", "TripService"),
 		slog.String("operation", "CreateTrip"),
 		slog.String("client_id", req.ClientID.String()),
 		slog.String("layer", "service"),
 	)
-
 	logger.Info("create trip started")
-
 	started := time.Now()
-	metricRsl := "success"
 
 	defer func() {
-		s.metrics.TripCreateTotal.WithLabelValues(metricRsl).Inc()
-		s.metrics.TripCreateDuration.WithLabelValues(metricRsl).
+		result := metricResult(err)
+		s.metrics.TripCreateTotal.WithLabelValues(result).Inc()
+		s.metrics.TripCreateDuration.WithLabelValues(result).
 			Observe(time.Since(started).Seconds())
 	}()
 
 	option, err := s.contractClient.CheckOption(ctx, req.CompanyID, "trip_creation")
 	if err != nil {
-		metricRsl = "internal_error"
 		return CreateTripResponse{}, fmt.Errorf("check trip_creation availability: %w", err)
 	}
 	if !option.Allowed {
-		metricRsl = "forbidden"
 		return CreateTripResponse{}, fmt.Errorf("%w: trip_creation is unavailable: %s", domain.ErrForbidden, option.Reason)
 	}
 
@@ -78,12 +72,6 @@ func (s *TripService) CreateTrip(
 		})
 
 		if err != nil {
-			if errors.Is(err, domain.ErrDomain) {
-				metricRsl = "validation_error"
-			} else {
-				metricRsl = "internal_error"
-			}
-
 			logger.Error(
 				"create trip usecase failed",
 				slog.String("layer", "transaction"),

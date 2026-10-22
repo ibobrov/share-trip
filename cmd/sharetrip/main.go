@@ -71,7 +71,7 @@ func main() {
 	registry := prometheus.NewRegistry()
 	tripMetrics := metrics.New(registry)
 
-	tripRepo := repository.NewTripRepository(tripMetrics)
+	tripRepo := repository.NewTripRepository()
 	tripHistoryRepo := repository.NewTripHistoryRepository()
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)

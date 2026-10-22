@@ -8,15 +8,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
-	"github.com/ibobrov/share_trip/internal/observability/metrics"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 )
 
-type TripRepository struct {
-	metrics *metrics.Metrics
-}
+type TripRepository struct{}
 
 type CreateTripRequest struct {
 	ID            uuid.UUID
@@ -30,10 +27,8 @@ type CreateTripRequest struct {
 	CreatedAt     time.Time
 }
 
-func NewTripRepository(metrics *metrics.Metrics) *TripRepository {
-	return &TripRepository{
-		metrics: metrics,
-	}
+func NewTripRepository() *TripRepository {
+	return &TripRepository{}
 }
 
 func (r *TripRepository) CreateTrip(
@@ -41,21 +36,6 @@ func (r *TripRepository) CreateTrip(
 	tx pgx.Tx,
 	req CreateTripRequest,
 ) error {
-	started := time.Now()
-	metricRsl := "success"
-
-	defer func() {
-		r.metrics.RepositoryQueryTotal.WithLabelValues(
-			"trip_create",
-			metricRsl,
-		).Inc()
-
-		r.metrics.RepositoryQueryDuration.WithLabelValues(
-			"trip_create",
-			metricRsl,
-		).Observe(time.Since(started).Seconds())
-	}()
-
 	logger := logctx.Logger(ctx).With(
 		slog.String("layer", "repository"),
 		slog.String("repository", "TripRepository"),
@@ -101,21 +81,6 @@ func (r *TripRepository) UpdateTrip(
 	ctx, span := tracer.Start(ctx, "TripRepository.UpdateTrip")
 	defer span.End()
 
-	started := time.Now()
-	metricRsl := "success"
-
-	defer func() {
-		r.metrics.RepositoryQueryTotal.WithLabelValues(
-			"update_create",
-			metricRsl,
-		).Inc()
-
-		r.metrics.RepositoryQueryDuration.WithLabelValues(
-			"update_create",
-			metricRsl,
-		).Observe(time.Since(started).Seconds())
-	}()
-
 	result, err := tx.Exec(ctx,
 		`
 			UPDATE trips
@@ -144,21 +109,6 @@ func (r *TripRepository) GetTripByID(
 
 	ctx, span := tracer.Start(ctx, "TripRepository.GetByID")
 	defer span.End()
-
-	started := time.Now()
-	metricRsl := "success"
-
-	defer func() {
-		r.metrics.RepositoryQueryTotal.WithLabelValues(
-			"get_trip_by_id",
-			metricRsl,
-		).Inc()
-
-		r.metrics.RepositoryQueryDuration.WithLabelValues(
-			"get_trip_by_id",
-			metricRsl,
-		).Observe(time.Since(started).Seconds())
-	}()
 
 	var trip entity.Trip
 
@@ -197,21 +147,6 @@ func (r *TripRepository) GetTripForUpdateByID(
 
 	ctx, span := tracer.Start(ctx, "TripRepository.GetTripForUpdateByID")
 	defer span.End()
-
-	started := time.Now()
-	metricRsl := "success"
-
-	defer func() {
-		r.metrics.RepositoryQueryTotal.WithLabelValues(
-			"get_trip_for_update_by_id",
-			metricRsl,
-		).Inc()
-
-		r.metrics.RepositoryQueryDuration.WithLabelValues(
-			"get_trip_for_update_by_id",
-			metricRsl,
-		).Observe(time.Since(started).Seconds())
-	}()
 
 	var trip entity.Trip
 	err := tx.QueryRow(ctx, `
