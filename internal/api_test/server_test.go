@@ -81,7 +81,7 @@ func TestMain(m *testing.M) {
 	registry := prometheus.NewRegistry()
 	tripMetrics := metrics.New(registry)
 
-	tripRepo := repository.NewTripRepository()
+	tripRepo := repository.NewTripRepository(testPool)
 	tripHistoryRepo := repository.NewTripHistoryRepository()
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("create contract client: %v", err)
 	}
-	tripService := service.NewTripService(testPool, tripUseCase, tripMetrics, contractClient)
+	tripService := service.NewTripService(testPool, tripUseCase, tripMetrics, contractClient, testPublisher)
 	server := api.NewServer(testPool, tripService, registry)
 
 	testApp = fiber.New()

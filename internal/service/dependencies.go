@@ -17,6 +17,7 @@ type TransactionBeginner interface {
 type TripUseCase interface {
 	CreateTrip(ctx context.Context, tx pgx.Tx, req domain.CreateTripRequest) (*domain.CreateTripResponse, error)
 	GetTrip(ctx context.Context, tx pgx.Tx, req domain.GetTripRequest) (*domain.GetTripResponse, error)
+	GetTripForPublication(ctx context.Context, req domain.GetTripForPublicationRequest) (*domain.GetTripForPublicationResponse, error)
 	MoveTripDraftToPublish(ctx context.Context, tx pgx.Tx, req domain.PublishTripRequest) (*domain.PublishTripResponse, error)
-	SentNotificationTripPublish(ctx context.Context, tx pgx.Tx, req domain.SentNotificationTripPublishRequest) error
+	SentNotificationTripPublish(ctx context.Context, tx pgx.Tx, req domain.SentNotificationTripPublishRequest) (*domain.SentNotificationTripPublishResponse, error)
 }

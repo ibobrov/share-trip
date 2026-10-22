@@ -14,31 +14,41 @@ import (
 const TripPublishedEventName = "trip_published"
 
 type SentNotificationTripPublishRequest struct {
-	TripID uuid.UUID
+	TripID     uuid.UUID
+	ClientID   uuid.UUID
+	CompanyID  string
+	OccurredAt time.Time
+}
+
+type SentNotificationTripPublishResponse struct {
+	EventID uuid.UUID
 }
 
 func (u *TripUseCase) SentNotificationTripPublish(
 	ctx context.Context,
 	tx pgx.Tx,
 	req SentNotificationTripPublishRequest,
-) error {
+) (*SentNotificationTripPublishResponse, error) {
 	tripPublishEventPayload, err := json.Marshal(entity.PublishTripPayload{
-		TripID: req.TripID,
+		TripID:    req.TripID,
+		ClientID:  req.ClientID,
+		CompanyID: req.CompanyID,
 	})
 	if err != nil {
-		return fmt.Errorf("marshal trip published payload: %w", err)
+		return nil, fmt.Errorf("marshal trip published payload: %w", err)
 	}
 
+	eventID := uuid.New()
 	err = u.outboxRepo.Create(ctx, tx, entity.OutboxEvent{
-		ID:          uuid.New(),
+		ID:          eventID,
 		EventName:   TripPublishedEventName,
 		AggregateID: req.TripID,
 		Payload:     tripPublishEventPayload,
-		CreatedAt:   time.Now(),
+		CreatedAt:   req.OccurredAt,
 	})
 	if err != nil {
-		return fmt.Errorf("create trip published event: %w", err)
+		return nil, fmt.Errorf("create trip published event: %w", err)
 	}
 
-	return nil
+	return &SentNotificationTripPublishResponse{EventID: eventID}, nil
 }

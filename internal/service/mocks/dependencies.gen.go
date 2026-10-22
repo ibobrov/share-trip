@@ -111,6 +111,21 @@ func (mr *MockTripUseCaseMockRecorder) GetTrip(ctx, tx, req any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrip", reflect.TypeOf((*MockTripUseCase)(nil).GetTrip), ctx, tx, req)
 }
 
+// GetTripForPublication mocks base method.
+func (m *MockTripUseCase) GetTripForPublication(ctx context.Context, req domain.GetTripForPublicationRequest) (*domain.GetTripForPublicationResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTripForPublication", ctx, req)
+	ret0, _ := ret[0].(*domain.GetTripForPublicationResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTripForPublication indicates an expected call of GetTripForPublication.
+func (mr *MockTripUseCaseMockRecorder) GetTripForPublication(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTripForPublication", reflect.TypeOf((*MockTripUseCase)(nil).GetTripForPublication), ctx, req)
+}
+
 // MoveTripDraftToPublish mocks base method.
 func (m *MockTripUseCase) MoveTripDraftToPublish(ctx context.Context, tx pgx.Tx, req domain.PublishTripRequest) (*domain.PublishTripResponse, error) {
 	m.ctrl.T.Helper()
@@ -127,11 +142,12 @@ func (mr *MockTripUseCaseMockRecorder) MoveTripDraftToPublish(ctx, tx, req any) 
 }
 
 // SentNotificationTripPublish mocks base method.
-func (m *MockTripUseCase) SentNotificationTripPublish(ctx context.Context, tx pgx.Tx, req domain.SentNotificationTripPublishRequest) error {
+func (m *MockTripUseCase) SentNotificationTripPublish(ctx context.Context, tx pgx.Tx, req domain.SentNotificationTripPublishRequest) (*domain.SentNotificationTripPublishResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SentNotificationTripPublish", ctx, tx, req)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*domain.SentNotificationTripPublishResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // SentNotificationTripPublish indicates an expected call of SentNotificationTripPublish.

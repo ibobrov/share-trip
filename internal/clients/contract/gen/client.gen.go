@@ -121,6 +121,7 @@ const (
 	Notifications    OptionCode = "notifications"
 	TripCreation     OptionCode = "trip_creation"
 	TripParticipants OptionCode = "trip_participants"
+	TripPublication  OptionCode = "trip_publication"
 )
 
 // Valid indicates whether the value is a known member of the OptionCode enum.
@@ -131,6 +132,8 @@ func (e OptionCode) Valid() bool {
 	case TripCreation:
 		return true
 	case TripParticipants:
+		return true
+	case TripPublication:
 		return true
 	default:
 		return false
@@ -174,7 +177,7 @@ type CheckOptionRequest struct {
 	// OptionCode Код услуги.
 	//
 	// Example: trip_creation
-	OptionCode OptionCode `json:"option_code" valid:"required~option_code обязателен,in(trip_creation|trip_participants|notifications)~UNKNOWN_SERVICE"`
+	OptionCode OptionCode `json:"option_code" valid:"required~option_code обязателен,in(trip_creation|trip_publication|trip_participants|notifications)~UNKNOWN_SERVICE"`
 }
 
 // CheckOptionResponse При allowed=true причина отсутствует; при allowed=false обязательна.
@@ -191,7 +194,7 @@ type ContractOption struct {
 	// Code Код услуги.
 	//
 	// Example: trip_creation
-	Code OptionCode `json:"code" valid:"required~код услуги обязателен,in(trip_creation|trip_participants|notifications)~неизвестная услуга"`
+	Code OptionCode `json:"code" valid:"required~код услуги обязателен,in(trip_creation|trip_publication|trip_participants|notifications)~неизвестная услуга"`
 }
 
 // ContractOptions Непустой список с уникальными кодами услуг.

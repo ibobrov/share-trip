@@ -23,6 +23,11 @@ type PublishTripResponse struct {
 	IsAlreadyPublished bool
 }
 
+type publishTripTransactionResponse struct {
+	TripID uuid.UUID
+	Event  TripPublishedEvent
+}
+
 func (s *TripService) PublishTrip(
 	ctx context.Context,
 	req PublishTripRequest,
@@ -45,10 +50,29 @@ func (s *TripService) PublishTrip(
 		slog.String("layer", "service"),
 	)
 
+	trip, err := s.tripUseCase.GetTripForPublication(ctx, domain.GetTripForPublicationRequest{TripID: req.TripID})
+	if err != nil {
+		return PublishTripResponse{}, fmt.Errorf("s.tripUseCase.GetTripForPublication: %w", err)
+	}
+	if trip.ClientID != req.ClientID {
+		return PublishTripResponse{}, fmt.Errorf("%w: client %s is not driver of trip %s", domain.ErrForbidden, req.ClientID, req.TripID)
+	}
+	if trip.Status == string(domain.TripStatusPublished) {
+		return PublishTripResponse{}, domain.ErrTripIsAlreadyPublished
+	}
+
+	option, err := s.contractClient.CheckOption(ctx, trip.CompanyID, "trip_publication")
+	if err != nil {
+		return PublishTripResponse{}, fmt.Errorf("cs.contractClient.CheckOption: %w", err)
+	}
+	if !option.Allowed {
+		return PublishTripResponse{}, fmt.Errorf("!option.Allowed: %w: trip_publication is unavailable: %s", domain.ErrForbidden, option.Reason)
+	}
+
 	result, err := tx(
 		ctx,
 		s.pool,
-		func(tx pgx.Tx) (*PublishTripResponse, error) {
+		func(tx pgx.Tx) (*publishTripTransactionResponse, error) {
 			res, err := s.tripUseCase.MoveTripDraftToPublish(ctx, tx, domain.PublishTripRequest{
 				TripID:   req.TripID,
 				ClientID: req.ClientID,
@@ -63,8 +87,11 @@ func (s *TripService) PublishTrip(
 				return nil, fmt.Errorf("usecase.MoveTripDraftToPublish: %w", err)
 			}
 
-			err = s.tripUseCase.SentNotificationTripPublish(ctx, tx, domain.SentNotificationTripPublishRequest{
-				TripID: req.TripID,
+			event, err := s.tripUseCase.SentNotificationTripPublish(ctx, tx, domain.SentNotificationTripPublishRequest{
+				TripID:     res.TripID,
+				ClientID:   res.ClientID,
+				CompanyID:  res.CompanyID,
+				OccurredAt: res.PublishedAt,
 			})
 
 			if err != nil {
@@ -76,7 +103,13 @@ func (s *TripService) PublishTrip(
 				return nil, fmt.Errorf("usecase.SentNotificationTripPublish: %w", err)
 			}
 
-			return &PublishTripResponse{TripID: res.TripID}, nil
+			return &publishTripTransactionResponse{
+				TripID: res.TripID,
+				Event: TripPublishedEvent{
+					EventID: event.EventID, TripID: res.TripID, ClientID: res.ClientID,
+					CompanyID: res.CompanyID, OccurredAt: res.PublishedAt,
+				},
+			}, nil
 		},
 	)
 
@@ -84,5 +117,8 @@ func (s *TripService) PublishTrip(
 		return PublishTripResponse{}, fmt.Errorf("tripService.PublishTrip:%w", err)
 	}
 
-	return *result, nil
+	if err := s.eventPublisher.PublishTripPublished(ctx, result.Event); err != nil {
+		return PublishTripResponse{}, fmt.Errorf("trip %s is published, but Kafka event was not confirmed: %w", result.TripID, err)
+	}
+	return PublishTripResponse{TripID: result.TripID}, nil
 }

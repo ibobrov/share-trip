@@ -26,7 +26,7 @@ func TestTripService_CreateTrip_Allowed(t *testing.T) {
 	transaction := mocks.NewMockTx(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
 	operationMetrics := metrics.New(prometheus.NewRegistry())
-	svc := service.NewTripService(pool, useCase, operationMetrics, contracts)
+	svc := service.NewTripService(pool, useCase, operationMetrics, contracts, nil)
 
 	request := service.CreateTripRequest{
 		ClientID: uuid.New(), CompanyID: "company-acme",
@@ -72,7 +72,7 @@ func TestTripService_CreateTrip_Denied(t *testing.T) {
 	contracts := mocks.NewMockContractChecker(ctrl)
 	pool := mocks.NewMockTransactionBeginner(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
-	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
+	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, nil)
 
 	contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
 		Return(service.CheckResult{Allowed: false, Reason: "CONTRACT_EXPIRED"}, nil).Times(1)
@@ -103,7 +103,7 @@ func TestTripService_CreateTrip_ContractError(t *testing.T) {
 			contracts := mocks.NewMockContractChecker(ctrl)
 			pool := mocks.NewMockTransactionBeginner(ctrl)
 			useCase := mocks.NewMockTripUseCase(ctrl)
-			svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
+			svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, nil)
 
 			contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
 				Return(service.CheckResult{}, tt.err).Times(1)
@@ -124,7 +124,7 @@ func TestTripService_CreateTrip_BeginFailed(t *testing.T) {
 	contracts := mocks.NewMockContractChecker(ctrl)
 	pool := mocks.NewMockTransactionBeginner(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
-	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
+	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, nil)
 	beginError := errors.New("begin failed")
 
 	gomock.InOrder(
@@ -147,7 +147,7 @@ func TestTripService_CreateTrip_DomainError(t *testing.T) {
 	pool := mocks.NewMockTransactionBeginner(ctrl)
 	transaction := mocks.NewMockTx(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
-	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
+	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, nil)
 
 	gomock.InOrder(
 		contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
@@ -172,7 +172,7 @@ func TestTripService_CreateTrip_CommitFailed(t *testing.T) {
 	pool := mocks.NewMockTransactionBeginner(ctrl)
 	transaction := mocks.NewMockTx(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
-	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
+	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, nil)
 	commitError := errors.New("commit failed")
 
 	gomock.InOrder(

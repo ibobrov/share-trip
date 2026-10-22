@@ -10,10 +10,13 @@ import (
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 )
 
-type TripRepository struct{}
+type TripRepository struct {
+	pool *pgxpool.Pool
+}
 
 type CreateTripRequest struct {
 	ID            uuid.UUID
@@ -27,8 +30,28 @@ type CreateTripRequest struct {
 	CreatedAt     time.Time
 }
 
-func NewTripRepository() *TripRepository {
-	return &TripRepository{}
+func NewTripRepository(pool *pgxpool.Pool) *TripRepository {
+	return &TripRepository{pool: pool}
+}
+
+type TripPublicationData struct {
+	ID        uuid.UUID
+	ClientID  uuid.UUID
+	CompanyID string
+	Status    string
+}
+
+func (r *TripRepository) GetTripForPublication(ctx context.Context, id uuid.UUID) (TripPublicationData, error) {
+	var trip TripPublicationData
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, client_id, company_id, status
+		FROM trips
+		WHERE id = $1
+	`, id).Scan(&trip.ID, &trip.ClientID, &trip.CompanyID, &trip.Status)
+	if err != nil {
+		return TripPublicationData{}, fmt.Errorf("get trip for publication: %w", err)
+	}
+	return trip, nil
 }
 
 func (r *TripRepository) CreateTrip(

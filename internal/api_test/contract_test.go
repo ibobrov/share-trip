@@ -26,7 +26,7 @@ func newContractTestServer() *httptest.Server {
 		}
 
 		var request contractgen.CheckOptionRequest
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request.OptionCode != contractgen.TripCreation {
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil || (request.OptionCode != contractgen.TripCreation && request.OptionCode != contractgen.TripPublication) {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"data":null,"errors":["invalid option check request"]}`))
 			return

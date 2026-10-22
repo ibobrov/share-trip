@@ -14,11 +14,10 @@ func (s *Server) Route(route fiber.Router, keycloakClientID string) {
 
 	trips := route.Group(
 		"/api/trip",
-		middleware.TimeoutMiddleware(2*time.Second),
 		middleware.RequireClientRole(keycloakClientID, "client"),
 	)
 
-	trips.Get("/:tripId", s.GetTrip)
-	trips.Post("/create", s.CreateTrip)
-	trips.Post("/publish", s.PublishTrip)
+	trips.Get("/:tripId", middleware.TimeoutMiddleware(2*time.Second), s.GetTrip)
+	trips.Post("/create", middleware.TimeoutMiddleware(2*time.Second), s.CreateTrip)
+	trips.Post("/publish", middleware.TimeoutMiddleware(4*time.Second), s.PublishTrip)
 }

@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,6 +15,7 @@ import (
 	"github.com/ibobrov/share_trip/internal/app"
 	"github.com/ibobrov/share_trip/internal/clients/contract"
 	"github.com/ibobrov/share_trip/internal/domain"
+	"github.com/ibobrov/share_trip/internal/events"
 	"github.com/ibobrov/share_trip/internal/observability/metrics"
 	"github.com/ibobrov/share_trip/internal/observability/middleware"
 	"github.com/ibobrov/share_trip/internal/observability/tracing"
@@ -71,7 +75,7 @@ func main() {
 	registry := prometheus.NewRegistry()
 	tripMetrics := metrics.New(registry)
 
-	tripRepo := repository.NewTripRepository()
+	tripRepo := repository.NewTripRepository(pool)
 	tripHistoryRepo := repository.NewTripHistoryRepository()
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
@@ -82,7 +86,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("contract.NewClient: %v", err)
 	}
-	tripService := service.NewTripService(pool, tripUseCase, tripMetrics, contractClient)
+	brokers := strings.Split(config.Env("KAFKA_BROKERS", "localhost:9092"), ",")
+	for i := range brokers {
+		brokers[i] = strings.TrimSpace(brokers[i])
+	}
+	producer := events.NewProducer(brokers, config.Env("KAFKA_TRIP_TOPIC", "trip.events"))
+	defer func() {
+		if err := producer.Close(); err != nil {
+			log.Printf("close Kafka producer: %v", err)
+		}
+	}()
+	tripService := service.NewTripService(pool, tripUseCase, tripMetrics, contractClient, producer)
 	server := api.NewServer(pool, tripService, registry)
 
 	application := fiber.New(fiber.Config{
@@ -113,9 +127,17 @@ func main() {
 	))
 
 	server.Route(application.Group(""), keycloakClientID)
+	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-shutdown.Done()
+		if err := application.ShutdownWithTimeout(5 * time.Second); err != nil {
+			log.Printf("HTTP shutdown: %v", err)
+		}
+	}()
 	httpPort := config.Env("HTTP_PORT", "8080")
 	if err := application.Listen(":" + httpPort); err != nil {
-		log.Fatalf("application.Listen: %v", err)
+		log.Printf("application.Listen: %v", err)
 		return
 	}
 }

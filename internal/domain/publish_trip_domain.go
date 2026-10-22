@@ -18,7 +18,10 @@ type PublishTripRequest struct {
 }
 
 type PublishTripResponse struct {
-	TripID uuid.UUID
+	TripID      uuid.UUID
+	ClientID    uuid.UUID
+	CompanyID   string
+	PublishedAt time.Time
 }
 
 func (u *TripUseCase) MoveTripDraftToPublish(
@@ -78,5 +81,7 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 		return nil, fmt.Errorf("tripHistoryRepo.CreateTripHistory: %w", err)
 	}
 
-	return &PublishTripResponse{TripID: trip.ID}, nil
+	return &PublishTripResponse{
+		TripID: trip.ID, ClientID: trip.ClientID, CompanyID: trip.CompanyID, PublishedAt: createdAt,
+	}, nil
 }

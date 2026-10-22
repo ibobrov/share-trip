@@ -1,0 +1,80 @@
+@startuml
+title Публикация поездки и отправка TripPublished в Kafka
+hide footbox
+skinparam shadowing false
+skinparam maxMessageSize 65
+
+actor Клиент as client
+box ShareTrip #ADD8E6
+participant "HTTP API" as api
+participant "Service layer" as service
+participant "Domain usecase" as domain
+database PostgreSQL as db
+participant "Kafka producer" as producer
+end box
+participant "Contract Service" as contract
+queue "Kafka: trip.events" as kafka
+
+client -> api: POST /api/trip/publish
+api -> service: PublishTrip(tripID, clientID)
+service -> domain: GetTripForPublication(tripID)
+domain -> db: SELECT id, client_id, company_id, status\nБез BEGIN и FOR UPDATE
+db --> domain: Поездка
+domain --> service: Данные для проверки публикации
+note over service
+  Владелец проверяется до обращения к Contract Service.
+  Уже опубликованная поездка → HTTP 200, без нового события.
+  Поездка не найдена → 404; чужой владелец → 403.
+end note
+service -> contract: POST /api/option/check\ncompany_id, trip_publication
+contract --> service: allowed / reason или ошибка
+
+alt Услуга доступна
+  service -> db: BEGIN
+  service -> domain: MoveTripDraftToPublish
+  domain -> db: SELECT ... FOR UPDATE
+  db --> domain: Актуальные данные поездки
+  domain -> domain: Проверить владельца и статус draft
+  domain -> db: UPDATE trips SET status = published
+  domain -> db: INSERT trip_history
+  domain --> service: trip_id, client_id, company_id, published_at
+  service -> domain: SentNotificationTripPublish
+  domain -> db: INSERT outbox_event\nid=event_id, payload, created_at=published_at
+  domain --> service: event_id
+  service -> db: COMMIT
+  db --> service: OK
+  note over service, db
+    Ошибка домена, outbox или COMMIT:
+    возвращается ошибка; producer не вызывается.
+  end note
+  service -> producer: PublishTripPublished(event)
+  producer -> kafka: key=trip_id, JSON TripPublished\nacks=all
+  alt Запись подтверждена
+    kafka --> producer: ACK
+    producer --> service: nil
+    service --> api: Опубликованная поездка
+    api --> client: 201 Created
+  else Запись не подтверждена / timeout
+    kafka --> producer: Ошибка / нет подтверждения
+    producer --> service: error
+    service --> api: Ошибка отправки после COMMIT
+    api --> client: 500 Internal Server Error
+    note over service, db
+      Поездка, история и outbox уже сохранены.
+      Автоматического отправителя outbox пока нет.
+      Повтор HTTP-запроса вернёт 200, без новой отправки.
+    end note
+  end
+else Услуга недоступна
+  service --> api: forbidden + reason
+  api --> client: 403 Forbidden
+else Ошибка Contract Service
+  service --> api: error
+  api --> client: 500 Internal Server Error
+end
+
+note over kafka
+  Consumer реализован в проекте share-trip-notification.
+  Он создаёт уведомление и подтверждает offset после COMMIT БД.
+end note
+@enduml
