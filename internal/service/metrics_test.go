@@ -58,7 +58,7 @@ func TestTripService_CreateTrip_Metrics(t *testing.T) {
 				pool.EXPECT().Begin(gomock.Any()).Return(nil, errors.New("begin failed")).Times(1)
 			}
 			operationMetrics := metrics.New(prometheus.NewRegistry())
-			svc := service.NewTripService(pool, nil, operationMetrics, checker, nil)
+			svc := service.NewTripService(pool, nil, operationMetrics, checker)
 
 			_, err := svc.CreateTrip(t.Context(), service.CreateTripRequest{CompanyID: "company-acme"})
 			require.Error(t, err)
@@ -90,7 +90,7 @@ func TestTripService_PublishTrip_BeginFailureMetrics(t *testing.T) {
 	checker := mocks.NewMockContractChecker(ctrl)
 	checker.EXPECT().CheckOption(gomock.Any(), "company-acme", "trip_publication").
 		Return(service.CheckResult{Allowed: true}, nil).Times(1)
-	svc := service.NewTripService(pool, useCase, operationMetrics, checker, nil)
+	svc := service.NewTripService(pool, useCase, operationMetrics, checker)
 
 	_, err := svc.PublishTrip(t.Context(), service.PublishTripRequest{})
 	require.Error(t, err)

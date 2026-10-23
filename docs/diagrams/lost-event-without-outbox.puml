@@ -1,0 +1,23 @@
+@startuml
+title Потеря события без outbox
+hide footbox
+actor Клиент as client
+participant ShareTrip as trip
+database PostgreSQL as db
+queue Kafka
+participant "Notification Service" as notification
+
+client -> trip: Опубликовать поездку
+trip -> db: BEGIN; UPDATE trips; INSERT history; COMMIT
+db --> trip: COMMIT успешен
+alt Процесс упал до отправки
+  note over trip: Поездка опубликована; событие не сохранено
+else Kafka недоступна
+  trip -> Kafka: TripPublished
+  Kafka --> trip: Ошибка / timeout
+end
+note over db, notification
+  Поездка опубликована, но уведомление не создаётся.
+  Kafka не может восстановить событие из состояния PostgreSQL.
+end note
+@enduml

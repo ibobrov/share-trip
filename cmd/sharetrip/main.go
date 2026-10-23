@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -96,7 +97,7 @@ func main() {
 			log.Printf("close Kafka producer: %v", err)
 		}
 	}()
-	tripService := service.NewTripService(pool, tripUseCase, tripMetrics, contractClient, producer)
+	tripService := service.NewTripService(pool, tripUseCase, tripMetrics, contractClient)
 	server := api.NewServer(pool, tripService, registry)
 
 	application := fiber.New(fiber.Config{
@@ -129,6 +130,17 @@ func main() {
 	server.Route(application.Group(""), keycloakClientID)
 	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	publisher := service.NewOutboxPublisher(pool, outboxRepo, producer, logger)
+	publisherCtx, stopPublisher := context.WithCancel(shutdown)
+	publisherDone := make(chan error, 1)
+	go func() { publisherDone <- publisher.Run(publisherCtx) }()
+	defer func() {
+		stopPublisher()
+		if err := <-publisherDone; err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("outbox publisher stopped", "error", err)
+		}
+	}()
 	go func() {
 		<-shutdown.Done()
 		if err := application.ShutdownWithTimeout(5 * time.Second); err != nil {

@@ -1,0 +1,34 @@
+@startuml
+title Inbox: уведомление и processed_events в одной транзакции
+hide footbox
+queue Kafka
+participant "Notification consumer" as consumer
+participant "Notification service/domain" as service
+database "Notification PostgreSQL" as db
+
+consumer -> Kafka: FetchMessage
+Kafka --> consumer: TripPublished(event_id, client_id, ...)
+consumer -> consumer: Проверить JSON и транспортные поля
+consumer -> service: HandleTripPublished(request)
+service -> db: BEGIN
+service -> db: INSERT processed_events ON CONFLICT DO NOTHING
+alt Новый event_id
+  service -> db: INSERT notifications: recipient_id=client_id
+else Уже обработан
+  note over service: Не создавать дубликат уведомления
+end
+alt Успешная транзакция
+  service -> db: COMMIT
+  db --> service: OK
+  service --> consumer: success / already_processed
+  consumer -> Kafka: CommitMessages(offset)
+else Ошибка
+  service -> db: ROLLBACK
+  service --> consumer: error
+  note over consumer: Остановка без commit offset
+end
+note over consumer, db
+  При сбое после COMMIT БД и до commit offset
+  повторное событие пропускается по event_id.
+end note
+@enduml

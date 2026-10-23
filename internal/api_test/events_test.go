@@ -1,55 +1,49 @@
 package api_test
 
 import (
-	"context"
-	"fmt"
-	"sync"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/ibobrov/share_trip/internal/service"
+	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/stretchr/testify/require"
 )
 
-type recordingEventPublisher struct {
-	mu     sync.Mutex
-	events map[uuid.UUID][]service.TripPublishedEvent
-}
-
-var testPublisher = &recordingEventPublisher{events: make(map[uuid.UUID][]service.TripPublishedEvent)}
-
-func (p *recordingEventPublisher) PublishTripPublished(ctx context.Context, event service.TripPublishedEvent) error {
-	var status string
-	if err := testPool.QueryRow(ctx, `SELECT status FROM trips WHERE id = $1`, event.TripID).Scan(&status); err != nil {
-		return err
-	}
-	if status != "published" {
-		return fmt.Errorf("event was sent before publication commit: %s", status)
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.events[event.TripID] = append(p.events[event.TripID], event)
-	return nil
-}
-
-func publishedEvents(t *testing.T, tripID uuid.UUID) []service.TripPublishedEvent {
+func queuedEvents(t *testing.T, tripID uuid.UUID) []entity.OutboxEvent {
 	t.Helper()
-	testPublisher.mu.Lock()
-	defer testPublisher.mu.Unlock()
-	return append([]service.TripPublishedEvent(nil), testPublisher.events[tripID]...)
+	rows, err := testPool.Query(t.Context(), `
+ SELECT id, event_name, aggregate_id, payload, created_at
+ FROM outbox_event WHERE aggregate_id = $1
+ `, tripID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var events []entity.OutboxEvent
+	for rows.Next() {
+		var event entity.OutboxEvent
+		require.NoError(t, rows.Scan(&event.ID, &event.EventName, &event.AggregateID, &event.Payload, &event.CreatedAt))
+		events = append(events, event)
+	}
+	require.NoError(t, rows.Err())
+	return events
 }
 
-func requirePublishedEvent(t *testing.T, tripID, clientID uuid.UUID, companyID string) {
+func requireQueuedEvent(t *testing.T, tripID, clientID uuid.UUID, companyID string) {
 	t.Helper()
-	events := publishedEvents(t, tripID)
+	events := queuedEvents(t, tripID)
 	require.Len(t, events, 1)
 	event := events[0]
-	require.Equal(t, clientID, event.ClientID)
-	require.Equal(t, companyID, event.CompanyID)
-	require.Equal(t, tripID, event.TripID)
-	var eventID uuid.UUID
-	err := testPool.QueryRow(t.Context(), `SELECT id FROM outbox_event WHERE aggregate_id = $1`, tripID).Scan(&eventID)
+	var payload entity.PublishTripPayload
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	require.Equal(t, clientID, payload.ClientID)
+	require.Equal(t, companyID, payload.CompanyID)
+	require.Equal(t, tripID, payload.TripID)
+	require.Equal(t, tripID, event.AggregateID)
+	require.NotEqual(t, uuid.Nil, event.ID)
+	require.False(t, event.CreatedAt.IsZero())
+	var status string
+	var attempts int
+	err := testPool.QueryRow(t.Context(), `SELECT status, attempts FROM outbox_event WHERE id = $1`, event.ID).Scan(&status, &attempts)
 	require.NoError(t, err)
-	require.Equal(t, eventID, event.EventID)
-	require.False(t, event.OccurredAt.IsZero())
+	require.Equal(t, "pending", status)
+	require.Zero(t, attempts, "HTTP publication does not call Kafka")
 }

@@ -58,11 +58,12 @@
 `internal/events/producer_test.go` проверяет JSON, ключ `trip_id` и передачу ошибок.
 `internal/events/producer_integration_test.go` проверяет отправку и чтение в реальной
 Kafka только при заданном `KAFKA_TEST_BROKERS`, в отдельном временном topic.
-API-тесты используют записывающий publisher, который отдельно читает статус из БД:
-событие должно отправляться после COMMIT и иметь тот же event_id, что и outbox.
-Service-тесты запрещают отправку при ошибках домена, outbox и COMMIT, а также
-проверяют ошибку producer после успешного COMMIT.
-
+API-тесты проверяют pending-событие в БД и отсутствие отправки в пользовательском запросе.
+`internal/api_test/outbox_publisher_test.go` проверяет отправку, повтор после сбоя,
+десять ошибок, конкурирующих publisher и повтор после ACK при сбое отметки sent.
+`internal/api_test/outbox_kafka_test.go` проверяет восстановление доставки из PostgreSQL
+в настоящую Kafka после недоступности брокера; требует `KAFKA_TEST_BROKERS`.
+Service-тесты проверяют единую транзакцию поездки, истории и события.
 Настройки, ограничения доставки и диаграмма описаны в [документе producer](kafka-producer.md).
 
 ## Команды

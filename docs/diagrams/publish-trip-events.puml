@@ -10,6 +10,7 @@ participant "HTTP API" as api
 participant "Service layer" as service
 participant "Domain usecase" as domain
 database PostgreSQL as db
+participant "Outbox publisher" as publisher
 participant "Kafka producer" as producer
 end box
 participant "Contract Service" as contract
@@ -43,26 +44,31 @@ alt Услуга доступна
   domain --> service: event_id
   service -> db: COMMIT
   db --> service: OK
+  service --> api: Поездка опубликована; событие сохранено
+  api --> client: 201 Created
   note over service, db
-    Ошибка домена, outbox или COMMIT:
-    возвращается ошибка; producer не вызывается.
+    Ошибка домена, outbox или COMMIT: ROLLBACK и ответ с ошибкой.
+    Kafka не вызывается в пользовательском запросе.
   end note
-  service -> producer: PublishTripPublished(event)
-  producer -> kafka: key=trip_id, JSON TripPublished\nacks=all
-  alt Запись подтверждена
-    kafka --> producer: ACK
-    producer --> service: nil
-    service --> api: Опубликованная поездка
-    api --> client: 201 Created
-  else Запись не подтверждена / timeout
-    kafka --> producer: Ошибка / нет подтверждения
-    producer --> service: error
-    service --> api: Ошибка отправки после COMMIT
-    api --> client: 500 Internal Server Error
-    note over service, db
-      Поездка, история и outbox уже сохранены.
-      Автоматического отправителя outbox пока нет.
-      Повтор HTTP-запроса вернёт 200, без новой отправки.
+  loop Каждую секунду
+    publisher -> db: BEGIN
+    publisher -> db: SELECT pending LIMIT 10 FOR UPDATE SKIP LOCKED
+    db --> publisher: События outbox_event
+    publisher -> producer: PublishTripPublished(event), тот же event_id
+    producer -> kafka: key=trip_id, JSON TripPublished, acks=all
+    alt ACK получен
+      kafka --> producer: ACK
+      producer --> publisher: nil
+      publisher -> db: status=sent, sent_at, attempts += 1, last_error=NULL
+    else Ошибка / timeout
+      producer --> publisher: error
+      publisher -> db: attempts += 1, last_error
+      note over publisher, db: attempts < 10: pending; attempts >= 10: failed
+    end
+    publisher -> db: COMMIT
+    note over publisher, db
+      При ошибке БД транзакция откатывается.
+      Отправленные в Kafka события могут быть доставлены повторно.
     end note
   end
 else Услуга недоступна

@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("create contract client: %v", err)
 	}
-	tripService := service.NewTripService(testPool, tripUseCase, tripMetrics, contractClient, testPublisher)
+	tripService := service.NewTripService(testPool, tripUseCase, tripMetrics, contractClient)
 	server := api.NewServer(testPool, tripService, registry)
 
 	testApp = fiber.New()

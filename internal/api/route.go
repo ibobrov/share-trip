@@ -19,5 +19,5 @@ func (s *Server) Route(route fiber.Router, keycloakClientID string) {
 
 	trips.Get("/:tripId", middleware.TimeoutMiddleware(2*time.Second), s.GetTrip)
 	trips.Post("/create", middleware.TimeoutMiddleware(2*time.Second), s.CreateTrip)
-	trips.Post("/publish", middleware.TimeoutMiddleware(4*time.Second), s.PublishTrip)
+	trips.Post("/publish", middleware.TimeoutMiddleware(2*time.Second), s.PublishTrip)
 }

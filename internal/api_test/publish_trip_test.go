@@ -156,7 +156,7 @@ func TestServer_PublishTrip(t *testing.T) {
 		require.Equal(t, trip.CompanyID, after.CompanyID)
 		require.Equal(t, before.HistoryCount+1, after.HistoryCount)
 		require.Equal(t, before.EventCount+1, after.EventCount)
-		requirePublishedEvent(t, trip.ID, clientID, trip.CompanyID)
+		requireQueuedEvent(t, trip.ID, clientID, trip.CompanyID)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -257,7 +257,7 @@ func TestServer_PublishTrip(t *testing.T) {
 
 		after := readPublishTripState(t, trip.ID)
 		require.Equal(t, before, after)
-		requirePublishedEvent(t, trip.ID, clientID, trip.CompanyID)
+		requireQueuedEvent(t, trip.ID, clientID, trip.CompanyID)
 	})
 
 	t.Run("поездка не найдена", func(t *testing.T) {

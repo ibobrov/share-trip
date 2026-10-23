@@ -23,8 +23,7 @@ func TestTripService_PublishTrip_ContractDenied(t *testing.T) {
 	pool := mocks.NewMockTransactionBeginner(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
 	contracts := mocks.NewMockContractChecker(ctrl)
-	publisher := mocks.NewMockEventPublisher(ctrl)
-	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, publisher)
+	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 	trip := &domain.GetTripForPublicationResponse{
 		ID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-from-trip", Status: "draft",
 	}
@@ -47,8 +46,7 @@ func TestTripService_PublishTrip_ReadError(t *testing.T) {
 	pool := mocks.NewMockTransactionBeginner(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
 	contracts := mocks.NewMockContractChecker(ctrl)
-	publisher := mocks.NewMockEventPublisher(ctrl)
-	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, publisher)
+	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 	tripID := uuid.New()
 	useCase.EXPECT().GetTripForPublication(gomock.Any(), domain.GetTripForPublicationRequest{TripID: tripID}).
 		Return(nil, domain.ErrNotFound).Times(1)
@@ -66,8 +64,7 @@ func TestTripService_PublishTrip_ContractTimeout(t *testing.T) {
 	pool := mocks.NewMockTransactionBeginner(ctrl)
 	useCase := mocks.NewMockTripUseCase(ctrl)
 	contracts := mocks.NewMockContractChecker(ctrl)
-	publisher := mocks.NewMockEventPublisher(ctrl)
-	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, publisher)
+	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 	trip := &domain.GetTripForPublicationResponse{
 		ID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-from-trip", Status: "draft",
 	}
@@ -100,8 +97,7 @@ func TestTripService_PublishTrip_Preconditions(t *testing.T) {
 			pool := mocks.NewMockTransactionBeginner(ctrl)
 			useCase := mocks.NewMockTripUseCase(ctrl)
 			contracts := mocks.NewMockContractChecker(ctrl)
-			publisher := mocks.NewMockEventPublisher(ctrl)
-			svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, publisher)
+			svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 			trip := &domain.GetTripForPublicationResponse{
 				ID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-from-trip", Status: tt.status,
 			}
@@ -123,21 +119,18 @@ func TestTripService_PublishTrip_Preconditions(t *testing.T) {
 func TestTripService_PublishTrip_AfterContractAllowed(t *testing.T) {
 	t.Parallel()
 	commitError := errors.New("commit failed")
-	kafkaError := errors.New("Kafka unavailable")
 	outboxError := errors.New("outbox insert failed")
 	tests := []struct {
 		name        string
 		domainError error
 		outboxError error
 		commitError error
-		kafkaError  error
 		wantError   error
 	}{
-		{name: "commit before publishing event"},
+		{name: "trip and outbox committed together"},
 		{name: "domain rejects changed state", domainError: domain.ErrConflict, wantError: domain.ErrConflict},
 		{name: "outbox failure prevents event", outboxError: outboxError, wantError: outboxError},
 		{name: "commit failure prevents event", commitError: commitError, wantError: commitError},
-		{name: "Kafka error after successful commit", kafkaError: kafkaError, wantError: kafkaError},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -146,9 +139,8 @@ func TestTripService_PublishTrip_AfterContractAllowed(t *testing.T) {
 			pool := mocks.NewMockTransactionBeginner(ctrl)
 			useCase := mocks.NewMockTripUseCase(ctrl)
 			contracts := mocks.NewMockContractChecker(ctrl)
-			publisher := mocks.NewMockEventPublisher(ctrl)
 			writeTx := mocks.NewMockTx(ctrl)
-			svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts, publisher)
+			svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 			trip := &domain.GetTripForPublicationResponse{
 				ID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-from-trip", Status: "draft",
 			}
@@ -172,12 +164,7 @@ func TestTripService_PublishTrip_AfterContractAllowed(t *testing.T) {
 			}
 			if tt.domainError == nil && tt.outboxError == nil {
 				commit := writeTx.EXPECT().Commit(gomock.Any()).Return(tt.commitError).After(last).Times(1)
-				last = writeTx.EXPECT().Rollback(gomock.Any()).Return(pgx.ErrTxClosed).After(commit).Times(1)
-				if tt.commitError == nil {
-					publisher.EXPECT().PublishTripPublished(gomock.Any(), service.TripPublishedEvent{
-						EventID: eventID, TripID: trip.ID, ClientID: trip.ClientID, CompanyID: trip.CompanyID, OccurredAt: occurredAt,
-					}).Return(tt.kafkaError).After(last).Times(1)
-				}
+				writeTx.EXPECT().Rollback(gomock.Any()).Return(pgx.ErrTxClosed).After(commit).Times(1)
 			} else {
 				writeTx.EXPECT().Rollback(gomock.Any()).Return(nil).After(last).Times(1)
 				writeTx.EXPECT().Commit(gomock.Any()).Times(0)

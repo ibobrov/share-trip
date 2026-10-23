@@ -1,0 +1,62 @@
+@startuml
+title ShareTrip → outbox → Kafka → inbox → Notification
+hide footbox
+skinparam maxMessageSize 65
+actor Клиент as client
+participant ShareTrip as trip
+participant "Contract Service" as contract
+database "ShareTrip PostgreSQL" as tripsDB
+participant "Outbox publisher" as publisher
+queue "Kafka: trip.events" as kafka
+participant "Notification consumer" as consumer
+database "Notification PostgreSQL" as notificationsDB
+
+client -> trip: Опубликовать поездку
+trip -> tripsDB: SELECT без блокировки
+tripsDB --> trip: client_id, company_id, status
+trip -> contract: CheckOption(company_id, trip_publication)
+contract --> trip: allowed=true
+trip -> tripsDB: BEGIN; SELECT FOR UPDATE
+trip -> tripsDB: UPDATE trips; INSERT history; INSERT outbox_event
+trip -> tripsDB: COMMIT
+tripsDB --> trip: OK
+trip --> client: 201 Created
+
+loop Каждую секунду, пока status=pending
+  publisher -> tripsDB: BEGIN; SELECT ... FOR UPDATE SKIP LOCKED
+  tripsDB --> publisher: До 10 событий
+  publisher -> kafka: TripPublished, тот же event_id, key=trip_id
+  alt ACK получен
+    kafka --> publisher: ACK
+    publisher -> tripsDB: status=sent, sent_at; attempts += 1
+  else Ошибка отправки
+    publisher -> tripsDB: attempts += 1, last_error
+    note over publisher, tripsDB: До 10 ошибок: pending; с 10-й: failed
+  end
+  publisher -> tripsDB: COMMIT
+end
+
+consumer -> kafka: FetchMessage, group=notification-service
+kafka --> consumer: TripPublished и offset
+consumer -> consumer: Проверить транспортные поля
+consumer -> notificationsDB: BEGIN
+consumer -> notificationsDB: INSERT processed_events ON CONFLICT DO NOTHING
+alt Новый event_id
+  consumer -> notificationsDB: INSERT notifications: recipient_id=client_id
+else Дубликат
+  note over consumer: Не создавать повторное уведомление
+end
+alt Успех
+  consumer -> notificationsDB: COMMIT
+  notificationsDB --> consumer: OK
+  consumer -> kafka: CommitMessages(offset)
+else Ошибка
+  consumer -> notificationsDB: ROLLBACK
+  note over consumer: Остановка без commit offset
+end
+note over publisher, consumer
+  Сбой между Kafka ACK и COMMIT publisher допускает дубль.
+  Сбой между COMMIT уведомления и commit offset допускает повторную доставку.
+  processed_events защищает создание уведомления в обоих случаях.
+end note
+@enduml

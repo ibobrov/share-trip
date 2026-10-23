@@ -64,7 +64,7 @@ func TestServer_PublishTrip_ContractOption(t *testing.T) {
 				require.Len(t, response.Errors, 1)
 				require.Contains(t, response.Errors[0], tt.wantError)
 				require.Equal(t, before, after, "denial must not change trip, history or outbox")
-				require.Empty(t, publishedEvents(t, trip.ID))
+				require.Empty(t, queuedEvents(t, trip.ID))
 				return
 			}
 			require.Empty(t, response.Errors)
@@ -73,7 +73,7 @@ func TestServer_PublishTrip_ContractOption(t *testing.T) {
 			require.Equal(t, string(domain.TripStatusPublished), after.Status)
 			require.Equal(t, before.HistoryCount+1, after.HistoryCount)
 			require.Equal(t, before.EventCount+1, after.EventCount)
-			requirePublishedEvent(t, trip.ID, clientID, trip.CompanyID)
+			requireQueuedEvent(t, trip.ID, clientID, trip.CompanyID)
 		})
 	}
 }
