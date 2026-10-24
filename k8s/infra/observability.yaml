@@ -1,0 +1,640 @@
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "grafana"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "grafana"
+  ports:
+    -
+      name: "http"
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "grafana"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "grafana"
+  template:
+    metadata:
+      labels:
+        app: "grafana"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "grafana"
+          image: "grafana/grafana:11.6.0"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "http"
+              containerPort: 3000
+          volumeMounts:
+            -
+              name: "data"
+              mountPath: "/var/lib/grafana"
+            -
+              name: "config"
+              mountPath: "/etc/grafana/provisioning/datasources/local.yaml"
+              subPath: "local.yaml"
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: "/api/health"
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/api/health"
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+      volumes:
+        -
+          name: "data"
+          persistentVolumeClaim:
+            claimName: "grafana"
+        -
+          name: "config"
+          configMap:
+            name: "grafana-datasources"
+  serviceName: "grafana"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "loki"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "loki"
+  ports:
+    -
+      name: "http"
+      port: 3100
+      targetPort: 3100
+---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "loki"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "loki"
+  template:
+    metadata:
+      labels:
+        app: "loki"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "loki"
+          image: "grafana/loki:3.7.0"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "http"
+              containerPort: 3100
+          args:
+            - "-config.file=/etc/loki/config.yaml"
+          volumeMounts:
+            -
+              name: "data"
+              mountPath: "/loki"
+            -
+              name: "config"
+              mountPath: "/etc/loki/config.yaml"
+              subPath: "config.yaml"
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: "/ready"
+              port: 3100
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/ready"
+              port: 3100
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+      volumes:
+        -
+          name: "data"
+          persistentVolumeClaim:
+            claimName: "loki"
+        -
+          name: "config"
+          configMap:
+            name: "loki-config"
+  serviceName: "loki"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "prometheus"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "prometheus"
+  ports:
+    -
+      name: "http"
+      port: 9090
+      targetPort: 9090
+---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "prometheus"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "prometheus"
+  template:
+    metadata:
+      labels:
+        app: "prometheus"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "prometheus"
+          image: "prom/prometheus@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "http"
+              containerPort: 9090
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time=7d"
+          volumeMounts:
+            -
+              name: "data"
+              mountPath: "/prometheus"
+            -
+              name: "config"
+              mountPath: "/etc/prometheus/prometheus.yml"
+              subPath: "prometheus.yml"
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: "/-/ready"
+              port: 9090
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/-/ready"
+              port: 9090
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+      volumes:
+        -
+          name: "data"
+          persistentVolumeClaim:
+            claimName: "prometheus"
+        -
+          name: "config"
+          configMap:
+            name: "prometheus-config"
+  serviceName: "prometheus"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "jaeger"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "jaeger"
+  ports:
+    -
+      name: "http"
+      port: 16686
+      targetPort: 16686
+    -
+      name: "otlp"
+      port: 4317
+      targetPort: 4317
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "jaeger"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "jaeger"
+  template:
+    metadata:
+      labels:
+        app: "jaeger"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "jaeger"
+          image: "jaegertracing/all-in-one:1.76.0"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "http"
+              containerPort: 16686
+            -
+              name: "otlp"
+              containerPort: 4317
+          env:
+            -
+              name: "COLLECTOR_OTLP_ENABLED"
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: "/"
+              port: 16686
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/"
+              port: 16686
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+  strategy:
+    type: "Recreate"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "otel-collector"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "otel-collector"
+  ports:
+    -
+      name: "otlp-http"
+      port: 4318
+      targetPort: 4318
+    -
+      name: "otlp-grpc"
+      port: 4317
+      targetPort: 4317
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "otel-collector"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "otel-collector"
+  template:
+    metadata:
+      labels:
+        app: "otel-collector"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "otel-collector"
+          image: "otel/opentelemetry-collector@sha256:63e5e8eccf4268be02388ba9f2dc36b80b5e47721291293411c0e83152d75bda"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "otlp-http"
+              containerPort: 4318
+            -
+              name: "otlp-grpc"
+              containerPort: 4317
+          args:
+            - "--config=/etc/otelcol/config.yaml"
+          volumeMounts:
+            -
+              name: "config"
+              mountPath: "/etc/otelcol/config.yaml"
+              subPath: "config.yaml"
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: 4318
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            tcpSocket:
+              port: 4318
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+      volumes:
+        -
+          name: "config"
+          configMap:
+            name: "otel-config"
+  strategy:
+    type: "Recreate"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "postgres-exporter-sharetrip"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "postgres-exporter-sharetrip"
+  ports:
+    -
+      name: "metrics"
+      port: 9187
+      targetPort: 9187
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "postgres-exporter-sharetrip"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "postgres-exporter-sharetrip"
+  template:
+    metadata:
+      labels:
+        app: "postgres-exporter-sharetrip"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "postgres-exporter-sharetrip"
+          image: "quay.io/prometheuscommunity/postgres-exporter@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "metrics"
+              containerPort: 9187
+          readinessProbe:
+            httpGet:
+              path: "/metrics"
+              port: 9187
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/metrics"
+              port: 9187
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          envFrom:
+            -
+              secretRef:
+                name: "postgres-exporter-sharetrip-secret"
+  strategy:
+    type: "Recreate"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "postgres-exporter-contract"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "postgres-exporter-contract"
+  ports:
+    -
+      name: "metrics"
+      port: 9187
+      targetPort: 9187
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "postgres-exporter-contract"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "postgres-exporter-contract"
+  template:
+    metadata:
+      labels:
+        app: "postgres-exporter-contract"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "postgres-exporter-contract"
+          image: "quay.io/prometheuscommunity/postgres-exporter@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "metrics"
+              containerPort: 9187
+          readinessProbe:
+            httpGet:
+              path: "/metrics"
+              port: 9187
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/metrics"
+              port: 9187
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          envFrom:
+            -
+              secretRef:
+                name: "postgres-exporter-contract-secret"
+  strategy:
+    type: "Recreate"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "postgres-exporter-notification"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "postgres-exporter-notification"
+  ports:
+    -
+      name: "metrics"
+      port: 9187
+      targetPort: 9187
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "postgres-exporter-notification"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "postgres-exporter-notification"
+  template:
+    metadata:
+      labels:
+        app: "postgres-exporter-notification"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "postgres-exporter-notification"
+          image: "quay.io/prometheuscommunity/postgres-exporter@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "metrics"
+              containerPort: 9187
+          readinessProbe:
+            httpGet:
+              path: "/metrics"
+              port: 9187
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/metrics"
+              port: 9187
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          envFrom:
+            -
+              secretRef:
+                name: "postgres-exporter-notification-secret"
+  strategy:
+    type: "Recreate"
+---
+apiVersion: "v1"
+kind: "ServiceAccount"
+metadata:
+  name: "alloy"
+  namespace: "sharetrip"
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "Role"
+metadata:
+  name: "alloy"
+  namespace: "sharetrip"
+rules:
+  -
+    apiGroups:
+      - ""
+    resources:
+      - "pods"
+      - "pods/log"
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "RoleBinding"
+metadata:
+  name: "alloy"
+  namespace: "sharetrip"
+roleRef:
+  apiGroup: "rbac.authorization.k8s.io"
+  kind: "Role"
+  name: "alloy"
+subjects:
+  -
+    kind: "ServiceAccount"
+    name: "alloy"
+    namespace: "sharetrip"
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "alloy"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "alloy"
+  template:
+    metadata:
+      labels:
+        app: "alloy"
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        -
+          name: "alloy"
+          image: "grafana/alloy@sha256:89a5a320168387336b9ac3c850609c3ba7757eadd4ae5f1d819deb35e9854b18"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "http"
+              containerPort: 12345
+          args:
+            - "run"
+            - "--server.http.listen-addr=0.0.0.0:12345"
+            - "/etc/alloy/config.alloy"
+          volumeMounts:
+            -
+              name: "config"
+              mountPath: "/etc/alloy/config.alloy"
+              subPath: "config.alloy"
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: "/-/ready"
+              port: 12345
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/-/ready"
+              port: 12345
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+      volumes:
+        -
+          name: "config"
+          configMap:
+            name: "alloy-config"
+      serviceAccountName: "alloy"
+  strategy:
+    type: "Recreate"

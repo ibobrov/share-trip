@@ -32,7 +32,7 @@ func (w *recordingWriter) Close() error {
 func TestProducer_PublishTripPublished(t *testing.T) {
 	t.Parallel()
 	writer := &recordingWriter{}
-	producer := &Producer{writer: writer}
+	producer := &Producer{writer: writer, timeout: time.Second}
 	event := service.TripPublishedEvent{
 		EventID: uuid.New(), TripID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-acme",
 		OccurredAt: time.Date(2026, 10, 22, 15, 0, 0, 0, time.FixedZone("MSK", 3*60*60)),
@@ -61,7 +61,7 @@ func TestProducer_PublishTripPublished_Error(t *testing.T) {
 	t.Parallel()
 	writeError := errors.New("broker unavailable")
 	writer := &recordingWriter{err: writeError}
-	producer := &Producer{writer: writer}
+	producer := &Producer{writer: writer, timeout: time.Second}
 	err := producer.PublishTripPublished(t.Context(), service.TripPublishedEvent{
 		EventID: uuid.New(), TripID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-acme", OccurredAt: time.Now().UTC(),
 	})

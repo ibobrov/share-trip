@@ -35,7 +35,7 @@ func TestProducer_Kafka(t *testing.T) {
 	_, err = connection.ReadPartitions(topic)
 	require.NoError(t, err)
 
-	producer := events.NewProducer(brokers, topic)
+	producer := events.NewProducer(brokers, topic, events.DefaultProducerConfig())
 	defer func() { require.NoError(t, producer.Close()) }()
 	event := service.TripPublishedEvent{
 		EventID: uuid.New(), TripID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-acme",

@@ -8,34 +8,22 @@ import (
 	"path/filepath"
 )
 
-func NewLogger() (*slog.Logger, *os.File, error) {
-	logPath := os.Getenv("LOG_FILE")
-	if logPath == "" {
-		return nil, nil, fmt.Errorf("LOG_FILE is required")
+// Empty logPath writes only to stdout, as expected in Kubernetes.
+func NewLogger(logPath string, level slog.Level) (*slog.Logger, *os.File, error) {
+	var output io.Writer = os.Stdout
+	var file *os.File
+	if logPath != "" {
+		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+			return nil, nil, fmt.Errorf("create log directory: %w", err)
+		}
+		var err error
+		file, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open log file: %w", err)
+		}
+		output = io.MultiWriter(os.Stdout, file)
 	}
-
-	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
-		return nil, nil, fmt.Errorf("create log directory: %w", err)
-	}
-
-	file, err := os.OpenFile(
-		logPath,
-		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
-		0644,
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("open log file: %w", err)
-	}
-
-	handler := slog.NewJSONHandler(
-		io.MultiWriter(os.Stdout, file),
-		&slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		},
-	)
-
-	logger := slog.New(handler)
+	logger := slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
-
 	return logger, file, nil
 }

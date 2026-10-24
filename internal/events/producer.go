@@ -11,7 +11,14 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-const publishTimeout = time.Second
+type ProducerConfig struct {
+	PublishTimeout time.Duration
+	MaxAttempts    int
+}
+
+func DefaultProducerConfig() ProducerConfig {
+	return ProducerConfig{PublishTimeout: time.Second, MaxAttempts: 3}
+}
 
 type messageWriter interface {
 	WriteMessages(context.Context, ...kafka.Message) error
@@ -21,6 +28,7 @@ type messageWriter interface {
 type Producer struct {
 	writer    messageWriter
 	transport *kafka.Transport
+	timeout   time.Duration
 }
 
 type TripPublished struct {
@@ -32,13 +40,13 @@ type TripPublished struct {
 	OccurredAt time.Time `json:"occurred_at"`
 }
 
-func NewProducer(brokers []string, topic string) *Producer {
-	transport := &kafka.Transport{DialTimeout: publishTimeout}
-	return &Producer{transport: transport, writer: &kafka.Writer{
+func NewProducer(brokers []string, topic string, cfg ProducerConfig) *Producer {
+	transport := &kafka.Transport{DialTimeout: cfg.PublishTimeout}
+	return &Producer{transport: transport, timeout: cfg.PublishTimeout, writer: &kafka.Writer{
 		Addr: kafka.TCP(brokers...), Topic: topic,
 		Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireAll,
-		BatchSize: 1, MaxAttempts: 3,
-		ReadTimeout: publishTimeout, WriteTimeout: publishTimeout,
+		BatchSize: 1, MaxAttempts: cfg.MaxAttempts,
+		ReadTimeout: cfg.PublishTimeout, WriteTimeout: cfg.PublishTimeout,
 		Transport: transport,
 	}}
 }
@@ -52,7 +60,7 @@ func (p *Producer) PublishTripPublished(ctx context.Context, event service.TripP
 	if err != nil {
 		return fmt.Errorf("marshal TripPublished: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(ctx, publishTimeout)
+	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 	if err := p.writer.WriteMessages(ctx, kafka.Message{
 		Key: []byte(event.TripID.String()), Value: data, Time: event.OccurredAt.UTC(),

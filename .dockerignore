@@ -1,0 +1,12 @@
+.git
+.idea
+.env
+.env.*
+!.env.example
+**/http-client.private.env.json
+**/*-secret.yaml
+.tools
+.reports
+.local
+bin
+deploy/logs

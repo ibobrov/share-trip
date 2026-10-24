@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
 	contractServer := newContractTestServer()
-	contractClient, err := contract.NewClient(contractServer.URL, &http.Client{Timeout: time.Second})
+	contractClient, err := contract.NewClient(contractServer.URL, &http.Client{Timeout: time.Second}, contract.DefaultClientConfig())
 	if err != nil {
 		log.Fatalf("create contract client: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestMain(m *testing.M) {
 
 	testApp = fiber.New()
 	testApp.Use(testAuthMiddleware)
-	server.Route(testApp.Group(""), testKeycloakClientID)
+	server.Route(testApp.Group(""), testKeycloakClientID, 2*time.Second)
 
 	code := m.Run()
 	contractServer.Close()

@@ -40,17 +40,17 @@ func TestOutboxPublisher_KafkaAndPostgres(t *testing.T) {
 	outbox := repository.NewOutboxRepository()
 
 	// A refused connection must leave a persisted event for the next worker.
-	unavailableProducer := events.NewProducer([]string{"127.0.0.1:1"}, topic)
-	publisher := service.NewOutboxPublisher(pool, outbox, unavailableProducer, slog.Default())
+	unavailableProducer := events.NewProducer([]string{"127.0.0.1:1"}, topic, events.DefaultProducerConfig())
+	publisher := service.NewOutboxPublisher(pool, outbox, unavailableProducer, slog.Default(), service.DefaultOutboxConfig())
 	result, err := publisher.PublishPending(ctx, service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Failed: 1}, result)
 	require.NoError(t, unavailableProducer.Close())
 	require.Equal(t, "pending", readOutboxDelivery(t, pool, event.EventID).Status)
 
-	producer := events.NewProducer(brokers, topic)
+	producer := events.NewProducer(brokers, topic, events.DefaultProducerConfig())
 	defer func() { require.NoError(t, producer.Close()) }()
-	publisher = service.NewOutboxPublisher(pool, outbox, producer, slog.Default())
+	publisher = service.NewOutboxPublisher(pool, outbox, producer, slog.Default(), service.DefaultOutboxConfig())
 	result, err = publisher.PublishPending(ctx, service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Sent: 1}, result)

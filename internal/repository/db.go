@@ -37,7 +37,7 @@ func (c Config) DSN() string {
 func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("parse postgres config: %w", err)
+		return nil, fmt.Errorf("invalid PostgreSQL configuration")
 	}
 
 	cfg.MaxConns = 10

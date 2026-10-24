@@ -1,0 +1,36 @@
+{
+  "realm": "sharetrip",
+  "enabled": true,
+  "roles": {
+    "client": {
+      "sharetrip-api": [{ "name": "client" }]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "sharetrip-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${KEYCLOAK_CLIENT_SECRET}",
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "defaultClientScopes": ["profile", "email", "roles"],
+      "protocolMappers": [
+        {
+          "name": "company_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "company_id",
+            "claim.name": "company_id",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

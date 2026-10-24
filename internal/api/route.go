@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func (s *Server) Route(route fiber.Router, keycloakClientID string) {
+func (s *Server) Route(route fiber.Router, keycloakClientID string, requestTimeout time.Duration) {
 	route.Get("/metrics", adaptor.HTTPHandler(promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{})))
 
 	trips := route.Group(
@@ -17,7 +17,7 @@ func (s *Server) Route(route fiber.Router, keycloakClientID string) {
 		middleware.RequireClientRole(keycloakClientID, "client"),
 	)
 
-	trips.Get("/:tripId", middleware.TimeoutMiddleware(2*time.Second), s.GetTrip)
-	trips.Post("/create", middleware.TimeoutMiddleware(2*time.Second), s.CreateTrip)
-	trips.Post("/publish", middleware.TimeoutMiddleware(2*time.Second), s.PublishTrip)
+	trips.Get("/:tripId", middleware.TimeoutMiddleware(requestTimeout), s.GetTrip)
+	trips.Post("/create", middleware.TimeoutMiddleware(requestTimeout), s.CreateTrip)
+	trips.Post("/publish", middleware.TimeoutMiddleware(requestTimeout), s.PublishTrip)
 }

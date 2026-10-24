@@ -68,6 +68,22 @@ Service-тесты проверяют единую транзакцию поез
 
 ## Команды
 
+Кодогенерация:
+
+| Репозиторий | Команда | Результат |
+| --- | --- | --- |
+| share-trip-contract | `make generate` | Типы и серверный интерфейс из `api/contract.yaml`, oapi-codegen v2.8.0 |
+| share-trip | `make generate` или `make generate-mocks` | Mock сервисных зависимостей, mockgen v0.6.0 |
+| share-trip | `make generate-contract-client` | HTTP-клиент из `http://localhost:38082/api/contract.yaml`, oapi-codegen v2.8.0 |
+| share-trip-notification | Нет | Кодогенерация не настроена |
+
+`make k8s-up` собирает уже существующий сгенерированный Go-код и не запускает генераторы.
+После изменения контракта выполните `make generate` в share-trip-contract, затем
+`make k8s-up` в share-trip, чтобы работающий Contract отдавал обновлённый OpenAPI.
+После этого выполните `make generate-contract-client` в share-trip. Если изменился код клиента,
+для его использования в pod-е нужен повторный `make k8s-up`.
+Генерация клиента также выполняет `go mod tidy`.
+
 ```text
 make generate-mocks
 go test ./internal/service
@@ -82,3 +98,7 @@ Makefile. `make generate` также генерирует mock. Сгенерир
 
 Для полного набора тестов нужен работающий Docker. Unit-тестам сервиса и тестам
 HTTP-клиента Docker не требуется.
+
+PostgreSQL тестов создаётся Testcontainers отдельно от БД стенда; Docker Compose и Kubernetes
+для этих тестов не требуются. Kafka-тесты с `KAFKA_TEST_BROKERS` используют отдельно доступный
+брокер, как описано в [kafka-producer.md](kafka-producer.md).
