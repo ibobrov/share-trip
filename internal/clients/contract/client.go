@@ -12,22 +12,30 @@ import (
 	"github.com/ibobrov/share_trip/internal/service"
 )
 
-const (
-	RequestTimeout = 500 * time.Millisecond
-	checkTimeout   = 1200 * time.Millisecond
-	retryDelay     = 100 * time.Millisecond
-)
+const RequestTimeout = 500 * time.Millisecond
+
+type ClientConfig struct {
+	AttemptTimeout time.Duration
+	CheckTimeout   time.Duration
+	RetryAttempts  int
+	RetryDelay     time.Duration
+}
+
+func DefaultClientConfig() ClientConfig {
+	return ClientConfig{AttemptTimeout: RequestTimeout, CheckTimeout: 1200 * time.Millisecond, RetryAttempts: 2, RetryDelay: 100 * time.Millisecond}
+}
 
 type Client struct {
 	generated *contractgen.ClientWithResponses
+	config    ClientConfig
 }
 
-func NewClient(server string, httpClient *http.Client) (*Client, error) {
+func NewClient(server string, httpClient *http.Client, cfg ClientConfig) (*Client, error) {
 	generated, err := contractgen.NewClientWithResponses(server, contractgen.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("create contract client: %w", err)
 	}
-	return &Client{generated: generated}, nil
+	return &Client{generated: generated, config: cfg}, nil
 }
 
 func (c *Client) CheckOption(ctx context.Context, companyID string, optionCode string) (service.CheckResult, error) {
@@ -62,18 +70,18 @@ func (c *Client) CheckOption(ctx context.Context, companyID string, optionCode s
 }
 
 func (c *Client) checkOption(ctx context.Context, request contractgen.CheckOptionJSONRequestBody) (*contractgen.CheckOptionClientResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.config.CheckTimeout)
 	defer cancel()
 
-	for attempt := 0; attempt < 2; attempt++ {
-		attemptCtx, cancelAttempt := context.WithTimeout(ctx, RequestTimeout)
+	for attempt := 0; attempt < c.config.RetryAttempts; attempt++ {
+		attemptCtx, cancelAttempt := context.WithTimeout(ctx, c.config.AttemptTimeout)
 		response, err := c.generated.CheckOption(attemptCtx, request)
 		if err != nil {
 			cancelAttempt()
 			return nil, err
 		}
 
-		if response.StatusCode != http.StatusInternalServerError || attempt == 1 {
+		if response.StatusCode != http.StatusInternalServerError || attempt+1 == c.config.RetryAttempts {
 			parsed, err := contractgen.ParseCheckOptionClientResponse(response)
 			cancelAttempt()
 			return parsed, err
@@ -84,7 +92,7 @@ func (c *Client) checkOption(ctx context.Context, request contractgen.CheckOptio
 		_ = response.Body.Close()
 		cancelAttempt()
 
-		timer := time.NewTimer(retryDelay)
+		timer := time.NewTimer(c.config.RetryDelay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()

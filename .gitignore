@@ -1,7 +1,12 @@
 .idea
 .reports
+.local
 .tools
 .env
 bin
 deploy/logs
 http-client.private.env.json
+# Real runtime secrets; commit only example files.
+.env.*
+!.env.example
+k8s/*-secret.yaml

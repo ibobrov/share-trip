@@ -94,7 +94,7 @@ func TestOutboxPublisher_RetryAfterKafkaFailure(t *testing.T) {
 		attempts = append(attempts, event)
 		return kafkaError
 	})
-	publisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default())
+	publisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default(), service.DefaultOutboxConfig())
 	result, err := publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Failed: 1}, result)
@@ -110,7 +110,7 @@ func TestOutboxPublisher_RetryAfterKafkaFailure(t *testing.T) {
 		attempts = append(attempts, event)
 		return nil
 	}
-	publisher = service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default())
+	publisher = service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default(), service.DefaultOutboxConfig())
 	result, err = publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Sent: 1}, result)
@@ -136,7 +136,7 @@ func TestOutboxPublisher_TenFailuresStopAutomaticRetries(t *testing.T) {
 		calls++
 		return errors.New("Kafka unavailable")
 	})
-	publisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default())
+	publisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default(), service.DefaultOutboxConfig())
 	for attempt := 1; attempt <= 10; attempt++ {
 		result, err := publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 10})
 		require.NoError(t, err)
@@ -151,6 +151,26 @@ func TestOutboxPublisher_TenFailuresStopAutomaticRetries(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, result)
 	require.Equal(t, 10, calls)
+}
+
+func TestOutboxPublisher_CustomRetryLimit(t *testing.T) {
+	t.Parallel()
+	pool := newOutboxTestPool(t)
+	event := savePendingEvent(t, pool)
+	producer := outboxTestProducer(func(context.Context, service.TripPublishedEvent) error {
+		return errors.New("Kafka unavailable")
+	})
+	cfg := service.DefaultOutboxConfig()
+	cfg.MaxAttempts = 2
+	publisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default(), cfg)
+	_, err := publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 1})
+	require.NoError(t, err)
+	require.Equal(t, "pending", readOutboxDelivery(t, pool, event.EventID).Status)
+	_, err = publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 1})
+	require.NoError(t, err)
+	state := readOutboxDelivery(t, pool, event.EventID)
+	require.Equal(t, "failed", state.Status)
+	require.Equal(t, 2, state.Attempts)
 }
 
 func TestOutboxPublisher_ConcurrentWorkersSkipLockedEvents(t *testing.T) {
@@ -172,7 +192,7 @@ func TestOutboxPublisher_ConcurrentWorkersSkipLockedEvents(t *testing.T) {
 			return ctx.Err()
 		}
 	})
-	firstPublisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), blockingProducer, slog.Default())
+	firstPublisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), blockingProducer, slog.Default(), service.DefaultOutboxConfig())
 	go func() {
 		_, err := firstPublisher.PublishPending(ctx, service.PublishPendingRequest{Limit: 1})
 		done <- err
@@ -192,7 +212,7 @@ func TestOutboxPublisher_ConcurrentWorkersSkipLockedEvents(t *testing.T) {
 		delivered = append(delivered, event)
 		return nil
 	})
-	secondPublisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), secondProducer, slog.Default())
+	secondPublisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), secondProducer, slog.Default(), service.DefaultOutboxConfig())
 	result, err := secondPublisher.PublishPending(ctx, service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Sent: 1}, result)
@@ -226,12 +246,12 @@ func TestOutboxPublisher_KafkaAckBeforeDatabaseFailure(t *testing.T) {
 	})
 	dbError := errors.New("database write failed after Kafka ACK")
 	outbox := repository.NewOutboxRepository()
-	publisher := service.NewOutboxPublisher(pool, outboxWithMarkSentError{outbox, dbError}, producer, slog.Default())
+	publisher := service.NewOutboxPublisher(pool, outboxWithMarkSentError{outbox, dbError}, producer, slog.Default(), service.DefaultOutboxConfig())
 	_, err := publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 10})
 	require.ErrorIs(t, err, dbError)
 	require.Equal(t, outboxDeliveryState{Status: "pending"}, readOutboxDelivery(t, pool, event.EventID))
 
-	publisher = service.NewOutboxPublisher(pool, outbox, producer, slog.Default())
+	publisher = service.NewOutboxPublisher(pool, outbox, producer, slog.Default(), service.DefaultOutboxConfig())
 	_, err = publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, []service.TripPublishedEvent{event, event}, delivered, "redelivery must preserve event_id for inbox deduplication")
@@ -250,7 +270,7 @@ func TestOutboxPublisher_BadPayloadDoesNotBlockOtherEvents(t *testing.T) {
 		delivered = append(delivered, event)
 		return nil
 	})
-	publisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default())
+	publisher := service.NewOutboxPublisher(pool, repository.NewOutboxRepository(), producer, slog.Default(), service.DefaultOutboxConfig())
 	result, err := publisher.PublishPending(t.Context(), service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Sent: 1, Failed: 1}, result)

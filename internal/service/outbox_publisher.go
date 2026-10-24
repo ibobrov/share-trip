@@ -16,7 +16,18 @@ import (
 type OutboxStore interface {
 	LockPending(context.Context, pgx.Tx, int) ([]entity.OutboxEvent, error)
 	MarkSent(context.Context, pgx.Tx, uuid.UUID, time.Time) error
-	MarkFailed(context.Context, pgx.Tx, uuid.UUID, string) error
+	MarkFailed(context.Context, pgx.Tx, uuid.UUID, string, int) error
+}
+
+type OutboxConfig struct {
+	PollInterval time.Duration
+	BatchTimeout time.Duration
+	BatchSize    int
+	MaxAttempts  int
+}
+
+func DefaultOutboxConfig() OutboxConfig {
+	return OutboxConfig{PollInterval: time.Second, BatchTimeout: 15 * time.Second, BatchSize: 10, MaxAttempts: 10}
 }
 
 // OutboxPublisher is an infrastructure worker; it does not change trip business state.
@@ -25,10 +36,11 @@ type OutboxPublisher struct {
 	outbox   OutboxStore
 	producer EventPublisher
 	logger   *slog.Logger
+	config   OutboxConfig
 }
 
-func NewOutboxPublisher(pool TransactionBeginner, outbox OutboxStore, producer EventPublisher, logger *slog.Logger) *OutboxPublisher {
-	return &OutboxPublisher{pool: pool, outbox: outbox, producer: producer, logger: logger}
+func NewOutboxPublisher(pool TransactionBeginner, outbox OutboxStore, producer EventPublisher, logger *slog.Logger, cfg OutboxConfig) *OutboxPublisher {
+	return &OutboxPublisher{pool: pool, outbox: outbox, producer: producer, logger: logger, config: cfg}
 }
 
 type PublishPendingRequest struct {
@@ -41,15 +53,15 @@ type PublishPendingResponse struct {
 }
 
 func (p *OutboxPublisher) Run(ctx context.Context) error {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(p.config.PollInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			batchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			_, err := p.PublishPending(batchCtx, PublishPendingRequest{Limit: 10})
+			batchCtx, cancel := context.WithTimeout(ctx, p.config.BatchTimeout)
+			_, err := p.PublishPending(batchCtx, PublishPendingRequest{Limit: p.config.BatchSize})
 			cancel()
 			if err != nil && ctx.Err() == nil {
 				p.logger.Error("publish outbox batch", "error", err)
@@ -70,7 +82,7 @@ func (p *OutboxPublisher) PublishPending(ctx context.Context, req PublishPending
 		response := &PublishPendingResponse{}
 		for _, event := range pending {
 			if err := p.publish(ctx, event); err != nil {
-				if markErr := p.outbox.MarkFailed(ctx, writeTx, event.ID, err.Error()); markErr != nil {
+				if markErr := p.outbox.MarkFailed(ctx, writeTx, event.ID, err.Error(), p.config.MaxAttempts); markErr != nil {
 					return nil, fmt.Errorf("mark outbox failure: %w", markErr)
 				}
 				p.logger.Error("publish outbox event", "event_id", event.ID, "error", err)

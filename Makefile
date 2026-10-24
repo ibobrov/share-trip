@@ -26,12 +26,13 @@ COMPOSE := docker compose --env-file .env -f deploy/docker-compose.yml
 REPORTS := .reports
 
 OAPI_CODEGEN_VERSION := v2.8.0
-CONTRACT_OPENAPI_URL ?= http://localhost:4002/api/contract.yaml
+CONTRACT_OPENAPI_URL ?= http://localhost:38082/api/contract.yaml
 CONTRACT_CLIENT_DIR := internal/clients/contract
 
 .PHONY: help deps tidy fmt lint test build run up down migrate-up migrate-down migrate-status
 .PHONY: migrate-create lint-install coverage coverage-html generate-contract-client
 .PHONY: install-mockgen generate generate-mocks
+.PHONY: k8s-up k8s-down
 
 help:
 	@echo Available commands:
@@ -40,6 +41,7 @@ help:
 	@echo   make tidy               - Update go.mod and go.sum
 	@echo   make fmt                - Format Go code
 	@echo   make generate-mocks     - Generate service mocks
+	@echo   make generate-contract-client - Generate Contract client from local Kubernetes
 	@echo   make lint-install       - Install golangci-lint with Go 1.26.0
 	@echo   make lint               - Run linters
 	@echo   make test               - Run all tests
@@ -49,6 +51,8 @@ help:
 	@echo   make run                - Run application
 	@echo   make up                 - Start Docker Compose services
 	@echo   make down               - Stop Docker Compose services
+	@echo   make k8s-up             - Build and start the full local Kubernetes stack
+	@echo   make k8s-down           - Stop Kubernetes workloads, keep data
 	@echo   make migrate-up         - Apply migrations
 	@echo   make migrate-down       - Roll back the last migration
 	@echo   make migrate-status     - Show migration status
@@ -92,6 +96,12 @@ up:
 
 down:
 	$(COMPOSE) down
+
+k8s-up:
+	go run ./cmd/devstack up
+
+k8s-down:
+	go run ./cmd/devstack down
 
 migrate-up:
 	"$(GOOSE)" -env .env -dir migrations up

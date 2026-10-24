@@ -1,0 +1,281 @@
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "kafka"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  publishNotReadyAddresses: true
+  selector:
+    app: "kafka"
+  ports:
+    -
+      name: "kafka"
+      port: 9092
+      targetPort: 9092
+    -
+      name: "controller"
+      port: 9093
+      targetPort: 9093
+---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "kafka"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "kafka"
+  template:
+    metadata:
+      labels:
+        app: "kafka"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "kafka"
+          image: "apache/kafka:4.1.2"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "kafka"
+              containerPort: 9092
+            -
+              name: "controller"
+              containerPort: 9093
+          env:
+            -
+              name: "KAFKA_NODE_ID"
+              value: "1"
+            -
+              name: "KAFKA_PROCESS_ROLES"
+              value: "broker,controller"
+            -
+              name: "KAFKA_CONTROLLER_QUORUM_VOTERS"
+              value: "1@kafka:9093"
+            -
+              name: "KAFKA_LISTENERS"
+              value: "INTERNAL://:9092,CONTROLLER://:9093"
+            -
+              name: "KAFKA_ADVERTISED_LISTENERS"
+              value: "INTERNAL://kafka:9092"
+            -
+              name: "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP"
+              value: "INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+            -
+              name: "KAFKA_LOG_DIRS"
+              value: "/var/lib/kafka/data"
+            -
+              name: "KAFKA_INTER_BROKER_LISTENER_NAME"
+              value: "INTERNAL"
+            -
+              name: "KAFKA_CONTROLLER_LISTENER_NAMES"
+              value: "CONTROLLER"
+            -
+              name: "CLUSTER_ID"
+              value: "4L6g3nShT-eMCtK--X86sw"
+            -
+              name: "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"
+              value: "1"
+            -
+              name: "KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR"
+              value: "1"
+            -
+              name: "KAFKA_TRANSACTION_STATE_LOG_MIN_ISR"
+              value: "1"
+            -
+              name: "KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR"
+              value: "1"
+            -
+              name: "KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR"
+              value: "1"
+            -
+              name: "KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS"
+              value: "0"
+            -
+              name: "KAFKA_AUTO_CREATE_TOPICS_ENABLE"
+              value: "false"
+          volumeMounts:
+            -
+              name: "data"
+              mountPath: "/var/lib/kafka/data"
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            tcpSocket:
+              port: 9092
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+      volumes:
+        -
+          name: "data"
+          persistentVolumeClaim:
+            claimName: "kafka"
+  serviceName: "kafka"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "keycloak"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "keycloak"
+  ports:
+    -
+      name: "http"
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "keycloak"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "keycloak"
+  template:
+    metadata:
+      labels:
+        app: "keycloak"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "keycloak"
+          image: "quay.io/keycloak/keycloak:26.1.0"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "http"
+              containerPort: 8080
+          args:
+            - "start-dev"
+            - "--import-realm"
+          env:
+            -
+              name: "KC_HOSTNAME"
+              value: "http://localhost:38087"
+            -
+              name: "KC_HOSTNAME_BACKCHANNEL_DYNAMIC"
+              value: "true"
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sharetrip-secret
+                  key: KEYCLOAK_CLIENT_SECRET
+            -
+              name: "KC_BOOTSTRAP_ADMIN_USERNAME"
+              valueFrom:
+                secretKeyRef:
+                  name: "keycloak-secret"
+                  key: "KC_BOOTSTRAP_ADMIN_USERNAME"
+            -
+              name: "KC_BOOTSTRAP_ADMIN_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: "keycloak-secret"
+                  key: "KC_BOOTSTRAP_ADMIN_PASSWORD"
+          volumeMounts:
+            -
+              name: "data"
+              mountPath: "/opt/keycloak/data"
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: "/realms/master"
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/realms/master"
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+      volumes:
+        -
+          name: "data"
+          persistentVolumeClaim:
+            claimName: "keycloak"
+        - name: realm
+          configMap:
+            name: keycloak-realm
+  serviceName: "keycloak"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "kafka-ui"
+  namespace: "sharetrip"
+spec:
+  type: "ClusterIP"
+  selector:
+    app: "kafka-ui"
+  ports:
+    -
+      name: "http"
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "kafka-ui"
+  namespace: "sharetrip"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "kafka-ui"
+  template:
+    metadata:
+      labels:
+        app: "kafka-ui"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        -
+          name: "kafka-ui"
+          image: "provectuslabs/kafka-ui@sha256:8f2ff02d64b0a7a2b71b6b3b3148b85f66d00ec20ad40c30bdcd415d46d31818"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            -
+              name: "http"
+              containerPort: 8080
+          env:
+            -
+              name: "KAFKA_CLUSTERS_0_NAME"
+              value: "local"
+            -
+              name: "KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS"
+              value: "kafka:9092"
+          readinessProbe:
+            httpGet:
+              path: "/actuator/health"
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet:
+              path: "/actuator/health"
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+  strategy:
+    type: "Recreate"

@@ -1,0 +1,119 @@
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "sharetrip-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "sharetrip"
+  ports:
+    -
+      name: "http"
+      port: 38080
+      targetPort: 8080
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "contract-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "contract"
+  ports:
+    -
+      name: "http"
+      port: 38082
+      targetPort: 8080
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "notification-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "notification"
+  ports:
+    -
+      name: "http"
+      port: 38081
+      targetPort: 8080
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "keycloak-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "keycloak"
+  ports:
+    -
+      name: "http"
+      port: 38087
+      targetPort: 8080
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "grafana-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "grafana"
+  ports:
+    -
+      name: "http"
+      port: 33000
+      targetPort: 3000
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "prometheus-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "prometheus"
+  ports:
+    -
+      name: "http"
+      port: 39090
+      targetPort: 9090
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "kafka-ui-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "kafka-ui"
+  ports:
+    -
+      name: "http"
+      port: 38085
+      targetPort: 8080
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "jaeger-local"
+  namespace: "sharetrip"
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: "jaeger"
+  ports:
+    -
+      name: "http"
+      port: 36686
+      targetPort: 16686

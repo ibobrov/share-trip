@@ -1,4 +1,10 @@
-### Get access token
+### Get tokens: Kubernetes
+POST http://localhost:38087/realms/sharetrip/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+client_id=sharetrip-api&client_secret={{CLIENT_SECRET}}&username={{USER_NAME}}&password={{USER_PASSWORD}}&grant_type=password
+
+### Get tokens: Docker Compose
 
 # curl --request POST
 #  --url http://localhost:8087/realms/sharetrip/protocol/openid-connect/token

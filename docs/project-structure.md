@@ -1,6 +1,6 @@
 # Структура Go-микросервиса: описание и правила переиспользования
 
-Версия документа: 1.0. Дата анализа: 14 октября 2026 года.
+Версия документа: 1.1. Сверено с кодом: 24 октября 2026 года.
 Основание: исходный код и конфигурация проекта `github.com/ibobrov/share_trip`.
 
 ## 1. Назначение и статус требований
@@ -11,7 +11,7 @@
 
 ## 2. Архитектурная модель
 
-Проект — один Go-модуль и один исполняемый HTTP-сервис с ручной сборкой зависимостей в `cmd/sharetrip/main.go`. Основной поток вызовов:
+Проект — один Go-модуль и HTTP-сервис и локальная команда запуска стенда с ручной сборкой зависимостей в `cmd/sharetrip/main.go`. Основной поток вызовов:
 
 ```text
 HTTP → middleware → api → service → domain → repository → PostgreSQL
@@ -27,10 +27,10 @@ HTTP → middleware → api → service → domain → repository → PostgreSQL
 | --- | --- |
 | Язык | Go 1.26.0 из `go.mod` |
 | HTTP | Fiber v2, govalidator v12 |
-| Доступ к БД | PostgreSQL 16 в Compose и тестах; pgx v5, pgxpool; SQL без ORM |
+| Доступ к БД | PostgreSQL 16 в Kubernetes, Compose и тестах; pgx v5, pgxpool; SQL без ORM |
 | Миграции | Goose, SQL-файлы с Up/Down |
 | Идентификаторы | UUID, `github.com/google/uuid` |
-| Логи | `log/slog`, JSON в stdout и файл |
+| Логи | `log/slog`, JSON в stdout; необязательный файл через LOG_FILE |
 | Метрики | Prometheus client, отдельный registry |
 | Трассировка | OpenTelemetry, OTLP HTTP, Collector, Jaeger |
 | Аутентификация | Обмен refresh token через Keycloak |
@@ -43,9 +43,13 @@ HTTP → middleware → api → service → domain → repository → PostgreSQL
 ```text
 .
 ├── cmd/sharetrip/main.go          # точка входа и сборка зависимостей
+├── cmd/devstack/                  # запуск полного стенда Docker Desktop Kubernetes
+├── k8s/                          # инфраструктура, приложения, ConfigMap и примеры Secret
 ├── internal/
 │   ├── api/                      # HTTP-маршруты, DTO, обработчики, ответы
 │   ├── service/                  # прикладные операции, транзакции, координация
+│   ├── clients/contract/         # HTTP-клиент Contract Service и сгенерированный код
+│   ├── events/                   # Kafka producer TripPublished
 │   ├── domain/                   # бизнес-правила и сценарии (use cases)
 │   ├── repository/               # SQL, пул БД, репозитории
 │   │   └── entity/               # структуры хранения и payload события
@@ -59,7 +63,7 @@ HTTP → middleware → api → service → domain → repository → PostgreSQL
 │   └── api_test/                 # интеграционные HTTP/БД-тесты
 ├── migrations/                   # версия схемы PostgreSQL
 ├── deploy/
-│   ├── docker-compose.yml        # локальные зависимости приложения
+│   ├── docker-compose.yml        # сохранённый вариант инфраструктуры Compose
 │   ├── alloy/                    # чтение файлов логов и отправка в Loki
 │   ├── loki/                     # хранение логов
 │   ├── prometheus/               # сбор метрик
@@ -75,7 +79,7 @@ HTTP → middleware → api → service → domain → repository → PostgreSQL
 └── .gitignore
 ```
 
-Локальные `.env`, `.idea/`, `.tools/`, `.reports/`, `bin/` и `deploy/logs/` исключены из Git. Они не являются исходным кодом каркаса. `api/` в корне и `internal/api/` имеют разное назначение: первый каталог зарезервирован, второй содержит исполняемый HTTP-слой.
+Локальные `.env`, `.idea/`, `.tools/`, `.reports/`, `.local/`, `bin/` и `deploy/logs/` исключены из Git. Они не являются исходным кодом каркаса. `api/` в корне и `internal/api/` имеют разное назначение: первый каталог зарезервирован, второй содержит исполняемый HTTP-слой.
 
 ### Границы слоёв
 
@@ -101,20 +105,24 @@ TripRepository + TripHistoryRepository + OutboxRepository
                           ↓
                      TripUseCase
                           ↓
-                 TripService ← pool, metrics
+                 TripService ← pool, metrics, Contract client
                           ↓
                       Server ← pool, registry
 ```
 
-Далее создаются Fiber и логгер, подключаются middleware и маршруты, вызывается `Listen`. Миграции при старте приложения не применяются: это отдельная команда. Обработка сигналов и graceful shutdown HTTP-сервера не реализованы.
+Логгер создаётся до подключения зависимостей, далее собираются Fiber, middleware и маршруты.
+Создаются Kafka producer и фоновый OutboxPublisher. При SIGINT/SIGTERM останавливаются HTTP
+и worker; producer, tracing provider и пул БД закрываются. SQL-миграции не применяются
+ни при старте приложения, ни командой `make k8s-up`: это отдельный шаг.
 
 ### 4.2. Порядок HTTP middleware
 
 1. OTel Fiber middleware.
 2. Correlation: принимает или генерирует `X-Request-Id`, возвращает его клиенту, помещает логгер и ID в контекст.
 3. HTTP-метрики.
-4. Keycloak refresh-token middleware.
-5. Для `/api/trip`: deadline контекста 2 секунды, затем проверка клиентской роли `client`.
+4. Для `/api/trip`: Keycloak refresh-token middleware.
+5. Для `/api/trip`: проверка клиентской роли `client`, затем deadline контекста обработчика
+   (по умолчанию 2 секунды). `/metrics` доступен без авторизации.
 6. Обработчик маршрута.
 
 Аутентификация использует `X-Refresh-Token`: сервер обменивает его в Keycloak на access token и декодирует claims полученного JWT. Самостоятельной проверки JWT-подписи в коде нет; токен берётся из ответа Keycloak, а не из входного Bearer-заголовка. `sub` используется как идентификатор пользователя и в операциях записи преобразуется в UUID.
@@ -127,9 +135,11 @@ Timeout задаёт deadline для нижележащих операций ч�
 
 `service.tx[T]` выполняет `Begin → block → Commit`, регистрируя отложенный `Rollback`. Ошибки оборачиваются через `%w`; rollback после commit игнорирует `pgx.ErrTxClosed`. Одна и та же `pgx.Tx` передаётся во все use cases и репозитории операции. Чтение поездки также выполняется внутри транзакции.
 
-Пример создания: бизнес-проверки времени и числа мест → вставка `trips` со статусом `draft` → вставка `trip_history` → commit.
+Пример создания: проверка `trip_creation` для компании из токена до транзакции →
+бизнес-проверки времени и числа мест в транзакции → вставка `trips` со статусом `draft` → вставка `trip_history` → commit.
 
-Пример публикации: `SELECT … FOR UPDATE` → проверка владельца → проверка статуса → изменение `trips` → запись истории → запись outbox → commit. Повторная публикация уже опубликованной поездки тем же владельцем успешна и не добавляет историю или событие. Идемпотентность основана на состоянии сущности и блокировке строки; общего механизма idempotency key нет.
+Пример публикации: отдельный SELECT без блокировки → проверка владельца и `trip_publication`
+для сохранённой компании вне транзакции → BEGIN → `SELECT … FOR UPDATE` → проверка владельца → проверка статуса → изменение `trips` → запись истории → запись outbox → commit. Повторная публикация уже опубликованной поездки тем же владельцем успешна и не добавляет историю или событие. Идемпотентность основана на состоянии сущности и блокировке строки; общего механизма idempotency key нет.
 
 ### 4.4. HTTP-контракт и ошибки
 
@@ -138,7 +148,7 @@ Timeout задаёт deadline для нижележащих операций ч�
 | `GET /api/trip/:tripId` | Получить поездку | 200 |
 | `POST /api/trip/create` | Создать черновик | 200 |
 | `POST /api/trip/publish` | Опубликовать | 201 впервые, 200 повторно |
-| `GET /metrics` | Prometheus exposition | 200 при прохождении middleware |
+| `GET /metrics` | Prometheus exposition | 200 без авторизации |
 
 Прикладные ответы используют оболочку:
 
@@ -157,44 +167,45 @@ Timeout задаёт deadline для нижележащих операций ч�
 | Объект PostgreSQL | Назначение |
 | --- | --- |
 | `trip_status` | ENUM: `draft`, `published`, `canceled`, `completed` |
-| `trips` | Основная сущность; UUID PK, владелец, маршрут, время, места, статус |
+| `trips` | Основная сущность; UUID PK, владелец, строковый company_id, маршрут, время, места, статус |
 | `trip_history` | История переходов; FK на поездку с `ON DELETE CASCADE` |
-| `outbox_event` | Событие: UUID, имя, aggregate ID, JSONB payload, время |
+| `outbox_event` | UUID, имя, aggregate ID, JSONB payload, время, status, attempts, last_error, sent_at |
 
 Миграции именуются `<timestamp>_<action>.sql` и содержат директивы Goose `Up`/`Down`. Порядок создания: ENUM → основная таблица → история → outbox.
 
-При публикации сохраняется событие `trip_published` с payload `{"trip_id":"<uuid>"}`. Метод `SentNotificationTripPublish` только добавляет запись в outbox. Отправщик, брокер, потребители, отметки доставки и повторные попытки отсутствуют. Атомарное сохранение события уже реализовано; доставка во внешний сервис ещё не реализована.
+При публикации сохраняется событие `trip_published` с payload `trip_id`, `client_id`, `company_id`.
+Метод `SentNotificationTripPublish` добавляет запись в outbox в той же транзакции, что статус и история.
+Фоновый OutboxPublisher отправляет `TripPublished` в Kafka с неизменным `event_id` и отмечает
+доставку после ACK. Повторная доставка возможна; Notification Service использует inbox
+`processed_events` и создаёт уведомление в одной транзакции, затем подтверждает offset.
+Подробности и ограничения: [kafka-producer.md](kafka-producer.md).
 
 Бизнес-документы в `docs/` описывают также более широкий набор процессов. Наличие описания бронирования, отмены или завершения не означает наличие соответствующих HTTP-операций в коде.
 
 ## 6. Конфигурация и локальная инфраструктура
 
-`config.Env` возвращает значение окружения или fallback; `EnvInt` использует fallback также при ошибке преобразования числа. `LOG_FILE` читается напрямую в `app.NewLogger` и обязателен. Содержимое локального `.env` не является частью этого документа.
+Настройки загружаются один раз через `config.Load()` до запуска зависимостей.
+Обязательные параметры и числовые значения проверяются; ошибки останавливают сервис.
+Подключение к БД передаётся через DATABASE_DSN; локальные POSTGRES_* также поддерживаются.
+LOG_FILE необязателен: без него JSON-логи пишутся только в stdout.
 
-| Переменные | Назначение / значение в коде при отсутствии настройки |
-| --- | --- |
-| `APP_ENV` | Окружение трассировки; `local` |
-| `HTTP_PORT` | Порт приложения; `8080` |
-| `DB_HOST`, `DB_PORT`, `DB_NAME` | PostgreSQL; `localhost`, `6543`, `sharetrip` |
-| `DB_USER`, `DB_PASSWORD`, `DB_SSLMODE` | Доступ к БД; имеются локальные fallback, SSL mode `disable` |
-| `KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET` | Параметры обмена токенов; локальный issuer и client ID `sharetrip-api` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP endpoint; `localhost:14319`, в формате `host:port` |
-| `LOG_FILE` | Обязательный путь к файлу JSON-логов |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` | Настройки PostgreSQL в Compose; должны соответствовать настройкам подключения приложения |
-| `POSTGRES_EXPORTER_PASSWORD` | Пароль отдельного пользователя exporter; обязателен в Compose |
-| Настройки Goose | Для CLI необходимы `GOOSE_DRIVER` и `GOOSE_DBSTRING` в окружении/`.env` либо эквивалентная конфигурация CLI |
-
-Compose запускает PostgreSQL, Loki, Grafana, Alloy, Prometheus, PostgreSQL exporter с init-сервисом, Jaeger и OTel Collector. Сам Go-сервис и Keycloak в Compose не включены. Keycloak требуется запустить и настроить отдельно.
+Полный список переменных, defaults, ConfigMap/Secret и порядок запуска:
+[k8s/README.md](../k8s/README.md). Текущий полный стенд запускается через `make k8s-up`;
+Compose сохранён как прежний вариант. SQL-миграции запускаются отдельно через Goose.
+Внешние и внутренние адреса: [addresses.md](addresses.md).
 
 Потоки наблюдаемости:
 
 ```text
-Приложение → stdout + LOG_FILE → Alloy → Loki → Grafana
+Kubernetes pod stdout → Alloy (Kubernetes API) → Loki → Grafana
 Prometheus → /metrics приложения + postgres_exporter
 Приложение → OTLP HTTP Collector → Jaeger
 ```
 
-Для сбора файловых логов путь `LOG_FILE` должен соответствовать `deploy/logs/app.log`, который Alloy видит как `/var/log/myapp/app.log`. Prometheus настроен на `host.docker.internal:4000`; это отличается от fallback `HTTP_PORT=8080`. Кроме того, глобальная аутентификация сейчас применяется к `/metrics`, а scrape-конфигурация не передаёт refresh token. Поэтому успешный сбор метрик требует согласования порта и политики доступа.
+В Kubernetes Alloy читает stdout pod-ов namespace `sharetrip`; LOG_FILE не нужен.
+Prometheus обращается к `sharetrip-service:8080/metrics` без токена и к трём PostgreSQL Exporter.
+Настройки `deploy/alloy` и `deploy/prometheus` относятся к сохранённому варианту Compose;
+актуальные конфигурации Kubernetes находятся в `k8s/config`.
 
 ## 7. Тесты и инструменты разработки
 
@@ -209,7 +220,8 @@ Prometheus → /metrics приложения + postgres_exporter
 | `make test` | `go test ./...`, включая контейнерные тесты |
 | `make coverage`, `make coverage-html` | Покрытие и отчёт в `.reports/` |
 | `make build`, `make run` | Бинарный файл в `bin/` или запуск через Go |
-| `make up`, `make down` | Запустить или остановить локальную инфраструктуру |
+| `make k8s-up`, `make k8s-down` | Запустить полный стенд Kubernetes или остановить с сохранением PVC |
+| `make up`, `make down` | Сохранённый вариант инфраструктуры Compose |
 | `make migrate-up`, `make migrate-down`, `make migrate-status` | Управление миграциями |
 | `make migrate-create name=create_table` | Создать SQL-миграцию |
 
@@ -219,14 +231,14 @@ Prometheus → /metrics приложения + postgres_exporter
 
 При переносе необходимо учитывать следующие факты:
 
-- Нет OpenAPI-контракта, Dockerfile приложения, CI-конфигурации, health/readiness endpoints и graceful shutdown HTTP.
-- Нет реализации доставки outbox-событий.
-- Нет единой оболочки для всех ошибок; прикладной обработчик возвращает клиенту `err.Error()`, включая внутренние ошибки.
-- Метрики репозиториев используют `result=success`, но не изменяют его при ошибках; ошибки начала/commit транзакции создания также не всегда отражаются в результате метрики. HTTP-метрика считывает статус до обработки возвращённой ошибки стандартным обработчиком Fiber.
-- Собственная проверка JWT-подписи, полная валидация конфигурации при старте и отдельный доступ к техническим маршрутам не реализованы.
-- В Compose присутствуют фиксированные `container_name`, порты и образы с тегом `latest`; слепое копирование мешает одновременному запуску нескольких сервисов и воспроизводимости окружения.
-
-Это ограничения исходной реализации; текущий документ не изменяет её поведение.
+- У ShareTrip нет собственного OpenAPI-контракта; контракт HTTP-клиента Contract Service генерируется отдельно.
+- Нет отдельных HTTP health/readiness endpoints; приложения в Kubernetes проверяются TCP-пробой.
+- Нет единой оболочки для ошибок middleware; прикладной обработчик может вернуть внутренний `err.Error()`.
+- Домен зависит от репозиториев и pgx; это не изолированная от инфраструктуры модель.
+- Метрики находятся в HTTP middleware и сервисном слое. CreateTrip и PublishTrip определяют результат
+  в defer по возвращаемой ошибке; метрик репозитория нет.
+- Реализованы Dockerfile, проверка конфигурации, graceful shutdown, outbox producer и отдельный consumer с inbox.
+- Бронирование, отмена, завершение и saga из бизнес-модели пока не реализованы.
 
 ## 9. Нормативный каркас нового микросервиса
 
@@ -251,7 +263,7 @@ internal/service/{<entity>_service.go,transaction.go,<operation>.go}
 internal/domain/{use_case.go,errors.go,<operation>_domain.go}
 internal/repository/{db.go,<entity>_repository.go}
 internal/repository/entity/<entity>.go
-internal/config/env.go
+internal/config/config.go
 internal/app/logger.go
 internal/observability/{logctx,metrics,tracing,middleware}/
 internal/api_test/{server_test.go,<operation>_test.go}
@@ -274,7 +286,8 @@ Makefile
 3. `service` ДОЛЖЕН определять границу прикладной транзакции и координировать use cases. Все атомарно связанные записи ДОЛЖНЫ использовать одну транзакцию.
 4. `domain` ДОЛЖЕН проверять бизнес-инварианты, права на конкретную сущность и допустимость переходов состояния. Проверка роли в middleware не заменяет проверку владельца.
 5. `repository` ДОЛЖЕН инкапсулировать SQL и принимать контекст и транзакцию. Репозитории не ДОЛЖНЫ самостоятельно фиксировать транзакцию прикладной операции.
-6. HTTP DTO, прикладные DTO и структуры хранения СЛЕДУЕТ разделять и преобразовывать явно.
+6. HTTP DTO, прикладные DTO и доменные DTO ДОЛЖНЫ быть отдельными Request/Response на каждом слое с явным преобразованием;
+   исключение — repository, который использует структуры хранения.
 7. Ошибки ДОЛЖНЫ сохранять причину через `%w`; классификация ДОЛЖНА использовать `errors.Is`. Новый HTTP-контракт ДОЛЖЕН явно определить коды и формат ошибок.
 8. Вызовы БД и внешних сервисов ДОЛЖНЫ получать контекст операции. Новые фоновые задачи ДОЛЖНЫ иметь собственный жизненный цикл и остановку.
 9. Изменения схемы ДОЛЖНЫ оформляться отдельными упорядоченными миграциями. Миграции другого домена не ДОЛЖНЫ переноситься механически.
@@ -323,6 +336,7 @@ Makefile
 | SQL и блокировки | `internal/repository/trip_repository.go` |
 | Авторизация | `internal/observability/middleware/keycloak.go` |
 | Тестовая инфраструктура | `internal/api_test/server_test.go`, `auth_test.go`, `publish_trip_test.go` |
-| Разработка и развёртывание | `Makefile`, `.golangci.yml`, `deploy/docker-compose.yml` |
+| Разработка и развёртывание | `Makefile`, `.golangci.yml`, `Dockerfile`, `cmd/devstack/`, `k8s/` |
+| Доставка событий | `internal/service/outbox_publisher.go`, `internal/events/producer.go` |
 
 Документ подготовлен статическим анализом файлов. Он не является отчётом об успешном запуске приложения, инфраструктуры или тестов.

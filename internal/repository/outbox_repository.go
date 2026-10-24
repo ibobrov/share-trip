@@ -90,15 +90,16 @@ func (r *OutboxRepository) MarkSent(ctx context.Context, tx pgx.Tx, id uuid.UUID
 	return nil
 }
 
-func (r *OutboxRepository) MarkFailed(ctx context.Context, tx pgx.Tx, id uuid.UUID, message string) error {
+func (r *OutboxRepository) MarkFailed(ctx context.Context, tx pgx.Tx, id uuid.UUID, message string, maxAttempts int) error {
 	result, err := tx.Exec(
 		ctx,
 		`
  		UPDATE outbox_event SET attempts = attempts + 1, last_error = $2,
- 		status = CASE WHEN attempts + 1 >= 10 THEN 'failed' ELSE 'pending' END
+		status = CASE WHEN attempts + 1 >= $3 THEN 'failed' ELSE 'pending' END
  		WHERE id = $1 AND status = 'pending'`,
 		id,
 		message,
+		maxAttempts,
 	)
 	if err != nil {
 		return fmt.Errorf("mark outbox failed: %w", err)

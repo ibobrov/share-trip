@@ -6,6 +6,9 @@ ShareTrip сохраняет событие вместе с публикацие
 
 ## Последовательность
 
+Ниже указаны настройки по умолчанию. Таймауты, размеры пачки и число попыток
+задаются через env; список параметров — в [k8s/README.md](../k8s/README.md).
+
 1. Отдельным SELECT без блокировки и явной транзакции читаются данные поездки.
 2. Проверяется владелец и разрешение `trip_publication` через Contract Service.
 3. В транзакции поездка повторно читается через SELECT FOR UPDATE, проверяются
@@ -45,26 +48,27 @@ Hash-балансировщик направляет события с один�
 
 ## Настройки и запуск
 
-```text
-KAFKA_BROKERS=localhost:9092
-KAFKA_TRIP_TOPIC=trip.events
-```
-
-`KAFKA_BROKERS` принимает список адресов через запятую. Для приложения внутри
-той же Docker-сети используется `kafka:29092`.
+Текущий полный стенд запускается из share-trip:
 
 ```text
-docker compose --env-file .env -f deploy/docker-compose.yml up -d --wait kafka kafka-init kafka-ui
-make run
+make k8s-up
 ```
 
-Сервис `kafka-init` идемпотентно создаёт topic `trip.events`: три partitions,
-replication factor 1 для локального брокера. При другом `KAFKA_TRIP_TOPIC`
-нужно отдельно создать соответствующий topic.
+В Kubernetes приложения используют `KAFKA_BROKERS=kafka:9092` и `KAFKA_TRIP_TOPIC=trip.events`.
+Данные Kafka хранятся в PVC `kafka`, каталог `/var/lib/kafka/data`.
+Job `kafka-init` идемпотентно создаёт topic `trip.events`: три partitions,
+replication factor 1. При другом `KAFKA_TRIP_TOPIC` нужно отдельно создать соответствующий topic
+и согласовать настройки producer и consumer.
 
-Kafka UI: http://localhost:8085. После успешной новой публикации сообщение
+Kafka UI: http://localhost:38085. После успешной новой публикации сообщение
 доступно в разделе Messages topic `trip.events`. Consumer group `notification-service`
 появляется после запуска Notification Service; после обработки продвигается её offset.
+Сам брокер наружу не опубликован. `kafka:9092` недоступен напрямую с Windows.
+
+Для прежнего запуска через Compose остаются listener `localhost:9092` для Windows,
+`kafka:29092` внутри сети Compose и `host.docker.internal:19092` для pod-ов, обращающихся
+к Compose. Эти адреса не используются текущим стендом Kubernetes.
+Карта адресов: [addresses.md](addresses.md).
 
 Producer использует `acks=all`, отправку без ожидания набора batch и до трёх
 попыток kafka-go в пределах контекста отправки. Отправка ограничена одной секундой
@@ -102,6 +106,9 @@ worker не отправляет событие с отсутствующим п
   и последующую доставку из PostgreSQL в настоящую Kafka через временный topic.
 - Unit-тесты адаптера проверяют JSON, ключ и ошибки; отдельный Kafka-тест проверяет сам producer.
 
+Пример для отдельного тестового брокера, доступного с Windows на `localhost:9092`.
+Текущий брокер Kubernetes по этому адресу не опубликован: простой port-forward
+не меняет advertised-адрес `kafka:9092`. Не используйте его как адрес Windows-клиента.
 PowerShell:
 
 ```powershell

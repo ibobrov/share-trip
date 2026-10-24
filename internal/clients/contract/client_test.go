@@ -5,13 +5,41 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	contractgen "github.com/ibobrov/share_trip/internal/clients/contract/gen"
 	"github.com/ibobrov/share_trip/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestClient_CheckOption_ConfiguredRetryAttempts(t *testing.T) {
+	t.Parallel()
+	for _, attempts := range []int{1, 3} {
+		t.Run(strconv.Itoa(attempts), func(t *testing.T) {
+			t.Parallel()
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"data":null,"errors":["unavailable"]}`))
+			}))
+			t.Cleanup(server.Close)
+			client, err := NewClient(server.URL, server.Client(), ClientConfig{
+				AttemptTimeout: 100 * time.Millisecond, CheckTimeout: time.Second,
+				RetryAttempts: attempts, RetryDelay: time.Millisecond,
+			})
+			require.NoError(t, err)
+
+			_, err = client.CheckOption(t.Context(), "company-acme", "trip_creation")
+			require.ErrorContains(t, err, "HTTP 500")
+			require.EqualValues(t, attempts, calls.Load())
+		})
+	}
+}
 
 func TestClient_CheckOption_Request(t *testing.T) {
 	t.Parallel()
@@ -34,7 +62,7 @@ func TestClient_CheckOption_Request(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"allowed":true},"errors":[]}`))
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, server.Client())
+	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
 	require.NoError(t, err)
 
 	result, err := client.CheckOption(t.Context(), "company-acme", "trip_creation")
@@ -111,7 +139,7 @@ func TestClient_CheckOption(t *testing.T) {
 
 			generated, err := contractgen.NewClientWithResponses(server.URL)
 			require.NoError(t, err)
-			client := &Client{generated: generated}
+			client := &Client{generated: generated, config: DefaultClientConfig()}
 
 			result, err := client.CheckOption(t.Context(), "company-acme", "trip_creation")
 			wantCalls := int32(1)
@@ -149,7 +177,7 @@ func TestClient_CheckOption_Retry500(t *testing.T) {
 				_, _ = w.Write([]byte(`{"data":{"allowed":true},"errors":[]}`))
 			}))
 			t.Cleanup(server.Close)
-			client, err := NewClient(server.URL, server.Client())
+			client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
 			require.NoError(t, err)
 
 			result, err := client.CheckOption(t.Context(), "company-acme", "trip_creation")
@@ -170,7 +198,7 @@ func TestClient_CheckOption_TimeoutIsNotRetried(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, server.Client())
+	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
 	require.NoError(t, err)
 
 	_, err = client.CheckOption(t.Context(), "company-acme", "trip_creation")
@@ -187,7 +215,7 @@ func TestClient_CheckOption_CanceledContext(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, server.Client())
+	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
