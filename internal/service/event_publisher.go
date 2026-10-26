@@ -10,6 +10,12 @@ import (
 //go:generate $MOCKGEN -source=event_publisher.go -destination=mocks/event_publisher.gen.go -package=mocks
 
 type TripPublishedEvent struct {
+	RequestID     string
+	CorrelationID string
+	CausationID   string
+	Traceparent   string
+	Tracestate    string
+
 	EventID    uuid.UUID
 	TripID     uuid.UUID
 	ClientID   uuid.UUID

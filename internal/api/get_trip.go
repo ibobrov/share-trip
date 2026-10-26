@@ -26,7 +26,7 @@ type GetTripResponse struct {
 }
 
 func (s *Server) GetTrip(c *fiber.Ctx) error {
-	tracer := otel.Tracer("trip-api")
+	tracer := otel.Tracer("sharetrip")
 
 	ctx, span := tracer.Start(c.UserContext(), "GetTripHandler")
 	defer span.End()
@@ -39,12 +39,12 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 	}
 	sub := claims.Subject
 
+	ctx = logctx.WithBusinessIDs(ctx, "", sub)
 	logger := logctx.Logger(ctx).With(
-		slog.String("server", "TripServer"),
-		slog.String("handler", "GetTrip"),
-		slog.String("client_id", sub),
+		slog.String("component", "TripServer"),
+		slog.String("operation", "GetTrip"),
 	)
-	logger.Info("get trip request accepted")
+	logger.Debug("get trip request accepted")
 
 	tripID, err := uuid.Parse(c.Params("tripId"))
 	if err != nil {
@@ -57,13 +57,9 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 
 	res, err := s.tripService.GetTripByIdRequest(ctx, service.GetTripRequest{TripID: tripID})
 	if err != nil {
-		return HandleError(c, func() {
-			logger.Error(
-				"get trip failed",
-				slog.Any("error", err),
-			)
-		}, err)
+		return HandleError(c, logger, err)
 	}
+	logger.Info("request completed", "result", "success", "trip_id", res.ID)
 	return Success(c, GetTripResponse{
 		ID:             res.ID,
 		ClientID:       res.ClientID,

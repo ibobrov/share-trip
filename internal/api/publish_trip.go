@@ -24,7 +24,7 @@ type PublishTripResponse struct {
 }
 
 func (s *Server) PublishTrip(c *fiber.Ctx) error {
-	tracer := otel.Tracer("trip-api")
+	tracer := otel.Tracer("sharetrip")
 
 	ctx, span := tracer.Start(c.UserContext(), "PublishTripHandler")
 	defer span.End()
@@ -37,10 +37,10 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 	}
 	sub := claims.Subject
 
+	ctx = logctx.WithBusinessIDs(ctx, "", sub)
 	logger := logctx.Logger(ctx).With(
-		slog.String("server", "TripServer"),
-		slog.String("handler", "PublishTrip"),
-		slog.String("client_id", sub),
+		slog.String("component", "TripServer"),
+		slog.String("operation", "PublishTrip"),
 	)
 
 	var req PublishTripRequest
@@ -54,7 +54,7 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 		attribute.String("client_id", sub),
 	)
 
-	logger.Info("publish trip request accepted")
+	logger.Debug("publish trip request accepted")
 
 	tripID, err := uuid.Parse(req.TripID)
 	if err != nil {
@@ -73,16 +73,13 @@ func (s *Server) PublishTrip(c *fiber.Ctx) error {
 
 	if err != nil {
 		if errors.Is(err, domain.ErrTripIsAlreadyPublished) {
+			logger.Info("request completed", "result", "already_published", "trip_id", tripID)
 			return Success(c, PublishTripResponse{TripID: tripID})
 		}
 
-		return HandleError(c, func() {
-			logger.Error(
-				"publish trip failed",
-				slog.Any("error", err),
-			)
-		}, err)
+		return HandleError(c, logger, err)
 	}
 
+	logger.Info("request completed", "result", "success", "trip_id", res.TripID, "event_id", res.EventID)
 	return SuccessWithHttpStatus(c, fiber.StatusCreated, PublishTripResponse{TripID: res.TripID})
 }

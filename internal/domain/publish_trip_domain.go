@@ -10,6 +10,7 @@ import (
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type PublishTripRequest struct {
@@ -28,11 +29,17 @@ func (u *TripUseCase) MoveTripDraftToPublish(
 	ctx context.Context,
 	tx pgx.Tx,
 	req PublishTripRequest,
-) (*PublishTripResponse, error) {
-	tracer := otel.Tracer("TripUsecase")
+) (response *PublishTripResponse, err error) {
+	tracer := otel.Tracer("sharetrip")
 
 	ctx, span := tracer.Start(ctx, "TripUsecase.PublishTrip")
 	defer span.End()
+	defer func() {
+		if err != nil && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrConflict) && !errors.Is(err, ErrTripIsAlreadyPublished) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "operation failed")
+		}
+	}()
 
 	trip, err := u.tripRepo.GetTripForUpdateByID(ctx, tx, req.TripID)
 	if err != nil {

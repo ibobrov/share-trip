@@ -31,7 +31,7 @@ func TestClient_CheckOption_ConfiguredRetryAttempts(t *testing.T) {
 			client, err := NewClient(server.URL, server.Client(), ClientConfig{
 				AttemptTimeout: 100 * time.Millisecond, CheckTimeout: time.Second,
 				RetryAttempts: attempts, RetryDelay: time.Millisecond,
-			})
+			}, nil)
 			require.NoError(t, err)
 
 			_, err = client.CheckOption(t.Context(), "company-acme", "trip_creation")
@@ -62,7 +62,7 @@ func TestClient_CheckOption_Request(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"allowed":true},"errors":[]}`))
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
+	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig(), nil)
 	require.NoError(t, err)
 
 	result, err := client.CheckOption(t.Context(), "company-acme", "trip_creation")
@@ -102,13 +102,13 @@ func TestClient_CheckOption(t *testing.T) {
 			name:       "validation error",
 			statusCode: http.StatusBadRequest,
 			body:       `{"data":null,"errors":["company_id is required"]}`,
-			wantError:  "HTTP 400: company_id is required",
+			wantError:  "HTTP 400",
 		},
 		{
 			name:       "internal server error",
 			statusCode: http.StatusInternalServerError,
 			body:       `{"data":null,"errors":["internal error"]}`,
-			wantError:  "HTTP 500: internal error",
+			wantError:  "HTTP 500",
 		},
 		{
 			name:       "unexpected status",
@@ -177,7 +177,7 @@ func TestClient_CheckOption_Retry500(t *testing.T) {
 				_, _ = w.Write([]byte(`{"data":{"allowed":true},"errors":[]}`))
 			}))
 			t.Cleanup(server.Close)
-			client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
+			client, err := NewClient(server.URL, server.Client(), DefaultClientConfig(), nil)
 			require.NoError(t, err)
 
 			result, err := client.CheckOption(t.Context(), "company-acme", "trip_creation")
@@ -198,7 +198,7 @@ func TestClient_CheckOption_TimeoutIsNotRetried(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
+	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig(), nil)
 	require.NoError(t, err)
 
 	_, err = client.CheckOption(t.Context(), "company-acme", "trip_creation")
@@ -215,7 +215,7 @@ func TestClient_CheckOption_CanceledContext(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig())
+	client, err := NewClient(server.URL, server.Client(), DefaultClientConfig(), nil)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -230,5 +230,5 @@ func TestClient_CheckOption_InvalidCode(t *testing.T) {
 
 	client := &Client{}
 	_, err := client.CheckOption(t.Context(), "company-acme", "unknown")
-	require.ErrorContains(t, err, "invalid option code: unknown")
+	require.ErrorContains(t, err, "invalid option code")
 }

@@ -32,6 +32,8 @@
 | Получить договор | POST | `http://localhost:38082/api/contract/get-by-id` |
 | Получить активный договор | POST | `http://localhost:38082/api/contract/get-active` |
 | Проверить услугу | POST | `http://localhost:38082/api/option/check` |
+| Метрики Contract | GET | `http://localhost:38082/metrics` |
+| Метрики Notification | GET | `http://localhost:38081/metrics` |
 | OpenAPI договора | GET | `http://localhost:38082/api/contract.yaml` |
 | Создать уведомление | POST | `http://localhost:38081/api/notification/` |
 | Получить уведомление | GET | `http://localhost:38081/api/notification/{notification_id}` |
@@ -39,7 +41,7 @@
 
 Для JSON-запросов задайте `Content-Type: application/json`.
 Для всех трёх операций поездок нужен заголовок `X-Refresh-Token: <refresh_token>`.
-`GET /metrics` доступен без токена. Прикладные ответы используют оболочку `data` / `errors`;
+`GET /metrics` доступен без токена во всех трёх сервисах. Прикладные ответы используют оболочку `data` / `errors`;
 ошибки middleware могут иметь другой формат.
 
 Получение токенов: [deploy/keycloak/auth.http](../deploy/keycloak/auth.http), первый запрос.
@@ -98,6 +100,9 @@
 | OTel Collector, HTTP / gRPC | `otel-collector:4318` / `otel-collector:4317` |
 | Jaeger, UI / OTLP gRPC | `http://jaeger:16686` / `jaeger:4317` |
 | PostgreSQL Exporter, по одному на БД | `postgres-exporter-sharetrip:9187`, `postgres-exporter-contract:9187`, `postgres-exporter-notification:9187` |
+
+Kafka Exporter доступен внутри кластера по адресу `http://kafka-exporter:9308/metrics`;
+Dashboard процесса: [Trip publication](http://localhost:33000/d/trip-publication).
 
 Alloy читает логи pod-ов через Kubernetes API; отдельного Service у него нет.
 PostgreSQL, Kafka-брокер, Loki, Collector и Exporter наружу не опубликованы.

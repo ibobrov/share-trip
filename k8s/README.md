@@ -27,7 +27,7 @@ KEYCLOAK_CLIENT_SECRET и POSTGRES_EXPORTER_PASSWORD. Секреты перед�
 ## Что запускается
 
 Три приложения, три PostgreSQL, Kafka, Kafka UI, Keycloak, Prometheus,
-три PostgreSQL Exporter, Grafana, Loki, Alloy, Jaeger и OTel Collector работают в namespace `sharetrip`.
+три PostgreSQL Exporter, Kafka Exporter, Grafana, Loki, Alloy, Jaeger и OTel Collector работают в namespace `sharetrip`.
 Внутри кластера используются Service DNS; зависимостей от `host.docker.internal` нет.
 
 `cmd/devstack` собирает и импортирует образы приложений в containerd Docker Desktop,
@@ -108,10 +108,12 @@ kubectl --context docker-desktop logs -n sharetrip deployment/sharetrip --tail=1
 Namespace, Secret, ConfigMap и PVC сохраняются. Удаление namespace удалит PVC — это не команда остановки.
 Применять весь каталог k8s рекурсивно нельзя: он содержит примеры Secret и отдельные фазы запуска.
 
-Prometheus читает `/metrics` без токена; бизнес-маршруты `/api/trip` требуют авторизации.
+Prometheus читает `/metrics` всех трёх приложений без токена и метрики Kafka/PostgreSQL Exporter;
+бизнес-маршруты `/api/trip` требуют авторизации.
 Alloy читает stdout pod-ов только namespace sharetrip через Kubernetes API и отправляет их в Loki.
 Grafana получает источники Prometheus, Loki и Jaeger через provisioning.
 Трейсы Jaeger, как и раньше в Compose, хранятся в памяти и пропадают при перезапуске.
+Dashboard Trip publication и расследование задержек уведомления: [docs/observability.md](../docs/observability.md).
 
 ## Изменение конфигурации
 
@@ -158,8 +160,8 @@ POSTGRES_PORT — 6543/6545/6544 соответственно, DB_SSLMODE — di
 | OUTBOX_MAX_ATTEMPTS | sharetrip | 10 |
 | KEYCLOAK_CLIENT_ID | sharetrip | sharetrip-api |
 | KEYCLOAK_TIMEOUT_MS | sharetrip | 5000 |
-| APP_ENV | sharetrip | local |
-| OTEL_EXPORTER_OTLP_ENDPOINT | sharetrip | localhost:14319, в ConfigMap otel-collector:4318 |
+| APP_ENV | Все | local |
+| OTEL_EXPORTER_OTLP_ENDPOINT | Все | localhost:14319, в ConfigMap otel-collector:4318 |
 
 Имена переменных одинаковы для local/dev/stage/prod. Адреса меняются в конфигурации,
 образы приложений остаются теми же. KAFKA_TRIP_TOPIC сохраняет существующее имя переменной проекта.

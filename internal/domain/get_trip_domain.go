@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type GetTripRequest struct {
@@ -31,11 +32,17 @@ func (u *TripUseCase) GetTrip(
 	ctx context.Context,
 	tx pgx.Tx,
 	req GetTripRequest,
-) (*GetTripResponse, error) {
-	tracer := otel.Tracer("TripUsecase")
+) (response *GetTripResponse, err error) {
+	tracer := otel.Tracer("sharetrip")
 
 	ctx, span := tracer.Start(ctx, "TripUsecase.GetTrip")
 	defer span.End()
+	defer func() {
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "operation failed")
+		}
+	}()
 
 	trip, err := u.tripRepo.GetTripByID(ctx, tx, req.TripID)
 

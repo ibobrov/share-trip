@@ -47,6 +47,15 @@ spec:
               mountPath: "/etc/grafana/provisioning/datasources/local.yaml"
               subPath: "local.yaml"
               readOnly: true
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards/sharetrip.yaml
+              subPath: dashboards.yaml
+              readOnly: true
+            - name: dashboard
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+          # Dashboard provisioning is separate from data source provisioning.
+          # Both ConfigMaps contain only non-secret configuration.
           readinessProbe:
             httpGet:
               path: "/api/health"
@@ -69,6 +78,12 @@ spec:
           name: "config"
           configMap:
             name: "grafana-datasources"
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboard
+          configMap:
+            name: trip-publication-dashboard
   serviceName: "grafana"
 ---
 apiVersion: "v1"
@@ -638,3 +653,56 @@ spec:
       serviceAccountName: "alloy"
   strategy:
     type: "Recreate"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-exporter
+  namespace: sharetrip
+spec:
+  selector:
+    app: kafka-exporter
+  ports:
+    - name: metrics
+      port: 9308
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-exporter
+  namespace: sharetrip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-exporter
+  template:
+    metadata:
+      labels:
+        app: kafka-exporter
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: kafka-exporter
+          image: danielqsj/kafka-exporter:v1.9.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --kafka.server=kafka:9092
+            - --kafka.version=3.6.0
+            - --topic.filter=^trip[.]events$
+            - --group.filter=^notification-service$
+          ports:
+            - name: metrics
+              containerPort: 9308
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 5
+            failureThreshold: 60

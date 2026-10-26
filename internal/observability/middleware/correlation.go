@@ -1,43 +1,38 @@
 package middleware
 
 import (
-	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 )
 
-const RequestIDHeader = "X-Request-Id"
+const RequestIDHeader = "X-Request-ID"
+const CorrelationIDHeader = "X-Correlation-ID"
 const LoggerLocalKey = "logger"
 
 func Correlation(baseLogger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		requestID := c.Get(RequestIDHeader)
+		// Copy header values: Fiber reuses its request buffers after the handler returns.
+		requestID := strings.Clone(c.Get(RequestIDHeader))
 		if requestID == "" {
 			requestID = uuid.NewString()
 		}
-
-		c.Set(RequestIDHeader, requestID)
-
-		requestLogger := baseLogger.With(
-			slog.String("request_id", requestID),
-			slog.String("method", c.Method()),
-			slog.String("path", c.Path()),
-		)
-
-		ctx := c.UserContext()
-		if ctx == nil {
-			ctx = context.Background()
+		correlationID := strings.Clone(c.Get(CorrelationIDHeader))
+		if correlationID == "" {
+			correlationID = requestID
 		}
-		ctx = logctx.WithRequestID(ctx, requestID)
-		ctx = logctx.WithLogger(ctx, requestLogger)
-
+		c.Set(RequestIDHeader, requestID)
+		c.Set(CorrelationIDHeader, correlationID)
+		logger := baseLogger.With("request_id", requestID, "correlation_id", correlationID, "method", strings.Clone(c.Method()), "path", strings.Clone(c.Path()))
+		ctx := logctx.WithRequestID(c.UserContext(), requestID)
+		ctx = logctx.WithCorrelationID(ctx, correlationID)
+		ctx = logctx.WithBusinessIDs(ctx, strings.Clone(c.Get("X-Trip-ID")), strings.Clone(c.Get("X-User-ID")))
+		ctx = logctx.WithLogger(ctx, logger)
 		c.SetUserContext(ctx)
-		c.Locals(LoggerLocalKey, requestLogger)
-
+		c.Locals(LoggerLocalKey, logger)
 		return c.Next()
 	}
 }

@@ -1,0 +1,79 @@
+@startuml
+title Наблюдаемость публикации поездки
+hide footbox
+skinparam shadowing false
+autonumber
+actor Клиент as user
+participant ShareTrip as trip
+participant Contract as contract
+database "ShareTrip PostgreSQL" as tripDB
+participant "Outbox publisher" as publisher
+queue Kafka as kafka
+participant "Notification consumer" as consumer
+database "Notification PostgreSQL" as notificationDB
+
+user -> trip: POST /api/trip/publish\nX-Request-ID, X-Correlation-ID, traceparent
+note over trip
+  Если ID не переданы: request_id = UUID,
+  correlation_id = request_id.
+  Инициатор берётся из проверенного токена.
+end note
+trip -> tripDB: Прочитать поездку без блокировки
+tripDB --> trip: company_id, client_id, status
+trip -> contract: POST /api/option/check\nrequest_id, correlation_id, traceparent\nX-Trip-ID, X-User-ID (диагностика)
+contract -> contract: CheckPermission\nлог result + идентификаторы\nметрики total и duration
+contract --> trip: allowed=true
+note over trip, contract: Синхронные spans продолжают одну trace
+
+trip -> tripDB: BEGIN; SELECT FOR UPDATE\nПроверить владельца и статус
+trip -> tripDB: Обновить статус + сохранить историю
+trip -> tripDB: INSERT outbox: event_id, payload + metadata\ncorrelation_id, causation_id=request_id, traceparent
+trip -> tripDB: COMMIT
+trip --> user: 201 Created
+note over trip, publisher: Kafka не входит в HTTP-транзакцию
+
+publisher -> tripDB: Читать pending под FOR UPDATE SKIP LOCKED
+tripDB --> publisher: event_id + бизнес-поля + metadata
+publisher -> publisher: Продолжить сохранённую trace\nspan Kafka publish TripPublished
+publisher -> kafka: TripPublished\nheaders: event_id, event_type, request_id,\ncorrelation_id, causation_id, traceparent
+alt Kafka ACK
+  kafka --> publisher: ACK
+  publisher -> tripDB: status=sent, attempts++, sent_at; COMMIT
+else Ошибка отправки
+  publisher -> tripDB: attempts++, last_error; COMMIT\npending либо failed после лимита
+  note over publisher: При повторе event_id и correlation_id неизменны
+end
+
+opt Сообщение появилось в topic (в том числе после повтора)
+kafka -> consumer: TripPublished + headers + offset
+consumer -> consumer: Новая trace, span ConsumeTripPublished\nlink на trace context из Kafka
+consumer -> notificationDB: BEGIN; INSERT processed_events\nON CONFLICT DO NOTHING
+alt Новый event_id
+  consumer -> notificationDB: INSERT notifications (status=created)
+else Уже обработан
+  consumer -> consumer: InboxInsert: duplicate\nНе создавать второе уведомление
+end
+alt Транзакция успешна
+  consumer -> notificationDB: COMMIT
+  consumer -> kafka: Commit offset
+  alt Offset подтверждён
+    consumer -> consumer: consume result=success либо duplicate
+  else Ошибка подтверждения
+    consumer -> consumer: consume result=error; остановить consumer\nПосле перезапуска inbox отсечёт дубль
+  end
+else Ошибка обработки
+  consumer -> notificationDB: ROLLBACK
+  consumer -> consumer: consume result=error\nНе подтверждать offset
+end
+note over consumer, notificationDB
+  Логи: event_id, correlation_id, causation_id, trace_id.
+  created означает сохранение в БД.
+  Внешний SMS/email-провайдер пока не подключён.
+end note
+end
+legend bottom
+  Общий correlation_id связывает процесс.
+  event_id связывает outbox, Kafka и inbox.
+  UUID остаются в логах и spans, не в labels метрик.
+endlegend
+@enduml

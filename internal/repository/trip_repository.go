@@ -2,16 +2,16 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/ibobrov/share_trip/internal/repository/entity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type TripRepository struct {
@@ -59,15 +59,6 @@ func (r *TripRepository) CreateTrip(
 	tx pgx.Tx,
 	req CreateTripRequest,
 ) error {
-	logger := logctx.Logger(ctx).With(
-		slog.String("layer", "repository"),
-		slog.String("repository", "TripRepository"),
-		slog.String("operation", "Create"),
-		slog.String("trip_id", req.ID.String()),
-		slog.String("client_id", req.ClientID.String()),
-	)
-	logger.Info("insert trip started")
-
 	_, err := tx.Exec(ctx,
 		`
 			INSERT INTO trips (id, client_id, company_id, from_point, to_point, departure_time, seats, status, created_at)
@@ -83,14 +74,9 @@ func (r *TripRepository) CreateTrip(
 		req.Status,
 		req.CreatedAt)
 	if err != nil {
-		logger.Error(
-			"insert trip failed",
-			slog.Any("error", err),
-		)
 		return fmt.Errorf("insert trips: %w", err)
 	}
 
-	logger.Info("insert trip completed")
 	return err
 }
 
@@ -99,7 +85,7 @@ func (r *TripRepository) UpdateTrip(
 	tx pgx.Tx,
 	trip entity.Trip,
 ) (ok bool, err error) {
-	tracer := otel.Tracer("TripRepository")
+	tracer := otel.Tracer("sharetrip")
 
 	ctx, span := tracer.Start(ctx, "TripRepository.UpdateTrip")
 	defer span.End()
@@ -114,6 +100,10 @@ func (r *TripRepository) UpdateTrip(
 	)
 
 	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "database operation failed")
+		}
 		return false, fmt.Errorf("update trips: %w", err)
 	}
 	if result.RowsAffected() == 0 {
@@ -128,7 +118,7 @@ func (r *TripRepository) GetTripByID(
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (entity.Trip, error) {
-	tracer := otel.Tracer("TripRepository")
+	tracer := otel.Tracer("sharetrip")
 
 	ctx, span := tracer.Start(ctx, "TripRepository.GetByID")
 	defer span.End()
@@ -155,6 +145,10 @@ func (r *TripRepository) GetTripByID(
 		&trip.CreatedAt,
 	)
 	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "database operation failed")
+		}
 		return entity.Trip{}, fmt.Errorf("get trips by id: %w", err)
 	}
 
@@ -166,7 +160,7 @@ func (r *TripRepository) GetTripForUpdateByID(
 	tx pgx.Tx,
 	id uuid.UUID,
 ) (entity.Trip, error) {
-	tracer := otel.Tracer("TripRepository")
+	tracer := otel.Tracer("sharetrip")
 
 	ctx, span := tracer.Start(ctx, "TripRepository.GetTripForUpdateByID")
 	defer span.End()
@@ -197,6 +191,10 @@ func (r *TripRepository) GetTripForUpdateByID(
 		&trip.CreatedAt,
 	)
 	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "database operation failed")
+		}
 		return entity.Trip{}, fmt.Errorf(
 			"r.pool.QueryRow get trip by id for update: %w", err,
 		)

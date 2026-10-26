@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/domain"
 	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type CreateTripRequest struct {
@@ -37,20 +38,18 @@ func (s *TripService) CreateTrip(
 	ctx context.Context,
 	req CreateTripRequest,
 ) (response CreateTripResponse, err error) {
-	logger := logctx.Logger(ctx).With(
-		slog.String("service", "TripService"),
-		slog.String("operation", "CreateTrip"),
-		slog.String("client_id", req.ClientID.String()),
-		slog.String("layer", "service"),
-	)
-	logger.Info("create trip started")
+	ctx, span := otel.Tracer("sharetrip").Start(ctx, "TripService.CreateTrip")
+	defer span.End()
 	started := time.Now()
-
 	defer func() {
 		result := metricResult(err)
+		if result == "internal_error" {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "operation failed")
+		}
+		logctx.Logger(ctx).Debug("trip creation completed", "component", "TripService", "operation", "CreateTrip", "trip_id", response.ID, "result", result)
 		s.metrics.TripCreateTotal.WithLabelValues(result).Inc()
-		s.metrics.TripCreateDuration.WithLabelValues(result).
-			Observe(time.Since(started).Seconds())
+		s.metrics.TripCreateDuration.WithLabelValues(result).Observe(time.Since(started).Seconds())
 	}()
 
 	option, err := s.contractClient.CheckOption(ctx, req.CompanyID, "trip_creation")
@@ -70,16 +69,9 @@ func (s *TripService) CreateTrip(
 			DepartureTime: req.DepartureTime,
 			Seats:         req.AvailableSeats,
 		})
-
 		if err != nil {
-			logger.Error(
-				"create trip usecase failed",
-				slog.String("layer", "transaction"),
-				slog.Any("error", err),
-			)
 			return nil, fmt.Errorf("usecase.CreateTrip: %w", err)
 		}
-
 		return &CreateTripResponse{
 			ID:             res.ID,
 			ClientID:       res.ClientID,
@@ -92,19 +84,8 @@ func (s *TripService) CreateTrip(
 			CreatedAt:      res.CreatedAt,
 		}, nil
 	})
-
 	if err != nil {
-		logger.Error(
-			"create trip failed",
-			slog.Any("error", err),
-		)
 		return CreateTripResponse{}, fmt.Errorf("failed in transaction: %w", err)
 	}
-
-	logger.Info(
-		"create trip completed",
-		slog.String("trip_id", result.ID.String()),
-	)
-
 	return *result, nil
 }

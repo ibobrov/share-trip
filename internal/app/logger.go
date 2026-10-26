@@ -23,7 +23,7 @@ func NewLogger(logPath string, level slog.Level) (*slog.Logger, *os.File, error)
 		}
 		output = io.MultiWriter(os.Stdout, file)
 	}
-	logger := slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: level}))
+	logger := slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: level})).With("service", "sharetrip")
 	slog.SetDefault(logger)
 	return logger, file, nil
 }

@@ -1,0 +1,1054 @@
+{
+  "variable": [
+    {
+      "value": "http://localhost:38080",
+      "type": "string",
+      "key": "sharetrip_url"
+    },
+    {
+      "value": "http://localhost:38082",
+      "type": "string",
+      "key": "contract_url"
+    },
+    {
+      "value": "http://localhost:38081",
+      "type": "string",
+      "key": "notification_url"
+    },
+    {
+      "value": "http://localhost:38087",
+      "type": "string",
+      "key": "keycloak_url"
+    },
+    {
+      "value": "sharetrip",
+      "type": "string",
+      "key": "realm"
+    },
+    {
+      "value": "sharetrip-api",
+      "type": "string",
+      "key": "client_id"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "client_secret"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "username"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "password"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "access_token"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "refresh_token"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "company_id"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "recipient_id"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "contract_id"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "trip_id"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "notification_id"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "correlation_id"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "starts_at"
+    },
+    {
+      "value": "",
+      "type": "string",
+      "key": "departure_time"
+    }
+  ],
+  "info": {
+    "name": "ShareTrip — All APIs",
+    "description": "ShareTrip, Contract, Notification and Keycloak. Kubernetes localhost URLs. Read api/postman/README.md before running. Secrets are intentionally empty. Trip endpoints require X-Refresh-Token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Keycloak",
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Token issued', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const t = pm.response.json();",
+                  "  pm.test('Tokens present', () => { pm.expect(t.access_token).to.be.a('string').and.not.empty; pm.expect(t.refresh_token).to.be.a('string').and.not.empty; });",
+                  "  if (t.access_token) pm.collectionVariables.set('access_token', t.access_token);",
+                  "  if (t.refresh_token) pm.collectionVariables.set('refresh_token', t.refresh_token);",
+                  "  if (t.access_token) {",
+                  "    const p = t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');",
+                  "    const claims = JSON.parse(atob(p));",
+                  "    if (claims.company_id) pm.collectionVariables.set('company_id', claims.company_id);",
+                  "    if (claims.sub) pm.collectionVariables.set('recipient_id', claims.sub);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "Get tokens (password)",
+          "request": {
+            "body": {
+              "urlencoded": [
+                {
+                  "value": "password",
+                  "type": "text",
+                  "key": "grant_type"
+                },
+                {
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "key": "client_id"
+                },
+                {
+                  "value": "{{client_secret}}",
+                  "type": "text",
+                  "key": "client_secret"
+                },
+                {
+                  "value": "{{username}}",
+                  "type": "text",
+                  "key": "username"
+                },
+                {
+                  "value": "{{password}}",
+                  "type": "text",
+                  "key": "password"
+                }
+              ],
+              "mode": "urlencoded"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "value": "application/x-www-form-urlencoded",
+                "key": "Content-Type"
+              }
+            ],
+            "method": "POST",
+            "url": "{{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token"
+          },
+          "response": []
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Token issued', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const t = pm.response.json();",
+                  "  pm.test('Tokens present', () => { pm.expect(t.access_token).to.be.a('string').and.not.empty; pm.expect(t.refresh_token).to.be.a('string').and.not.empty; });",
+                  "  if (t.access_token) pm.collectionVariables.set('access_token', t.access_token);",
+                  "  if (t.refresh_token) pm.collectionVariables.set('refresh_token', t.refresh_token);",
+                  "  if (t.access_token) {",
+                  "    const p = t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');",
+                  "    const claims = JSON.parse(atob(p));",
+                  "    if (claims.company_id) pm.collectionVariables.set('company_id', claims.company_id);",
+                  "    if (claims.sub) pm.collectionVariables.set('recipient_id', claims.sub);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "Refresh tokens (run when needed)",
+          "request": {
+            "body": {
+              "urlencoded": [
+                {
+                  "value": "refresh_token",
+                  "type": "text",
+                  "key": "grant_type"
+                },
+                {
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "key": "client_id"
+                },
+                {
+                  "value": "{{client_secret}}",
+                  "type": "text",
+                  "key": "client_secret"
+                },
+                {
+                  "value": "{{refresh_token}}",
+                  "type": "text",
+                  "key": "refresh_token"
+                }
+              ],
+              "mode": "urlencoded"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "value": "application/x-www-form-urlencoded",
+                "key": "Content-Type"
+              }
+            ],
+            "method": "POST",
+            "url": "{{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 Contracts",
+      "item": [
+        {
+          "response": [],
+          "name": "Create contract",
+          "request": {
+            "url": "{{contract_url}}/api/contract/create",
+            "body": {
+              "raw": "{\r\n  \"company_id\": \"{{company_id}}\",\r\n  \"starts_at\": \"{{starts_at}}\",\r\n  \"options\": [\r\n    {\r\n      \"code\": \"trip_creation\"\r\n    },\r\n    {\r\n      \"code\": \"trip_publication\"\r\n    },\r\n    {\r\n      \"code\": \"trip_participants\"\r\n    },\r\n    {\r\n      \"code\": \"notifications\"\r\n    }\r\n  ]\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Create contract",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "  if (body.data && body.data.id && (!body.errors || body.errors.length === 0)) pm.collectionVariables.set('contract_id', body.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Activate contract",
+          "request": {
+            "url": "{{contract_url}}/api/contract/activate",
+            "body": {
+              "raw": "{\r\n  \"id\": \"{{contract_id}}\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Activate contract",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Get contract by ID",
+          "request": {
+            "url": "{{contract_url}}/api/contract/get-by-id",
+            "body": {
+              "raw": "{\r\n  \"id\": \"{{contract_id}}\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Get contract by ID",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Get active contract",
+          "request": {
+            "url": "{{contract_url}}/api/contract/get-active",
+            "body": {
+              "raw": "{\r\n  \"company_id\": \"{{company_id}}\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Get active contract",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Options",
+      "item": [
+        {
+          "response": [],
+          "name": "Check trip_creation",
+          "request": {
+            "url": "{{contract_url}}/api/option/check",
+            "body": {
+              "raw": "{\r\n  \"company_id\": \"{{company_id}}\",\r\n  \"option_code\": \"trip_creation\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Check trip_creation",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Check trip_publication",
+          "request": {
+            "url": "{{contract_url}}/api/option/check",
+            "body": {
+              "raw": "{\r\n  \"company_id\": \"{{company_id}}\",\r\n  \"option_code\": \"trip_publication\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Check trip_publication",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Check trip_participants",
+          "request": {
+            "url": "{{contract_url}}/api/option/check",
+            "body": {
+              "raw": "{\r\n  \"company_id\": \"{{company_id}}\",\r\n  \"option_code\": \"trip_participants\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Check trip_participants",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Check notifications",
+          "request": {
+            "url": "{{contract_url}}/api/option/check",
+            "body": {
+              "raw": "{\r\n  \"company_id\": \"{{company_id}}\",\r\n  \"option_code\": \"notifications\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Check notifications",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Trips",
+      "item": [
+        {
+          "response": [],
+          "name": "Create trip",
+          "request": {
+            "url": "{{sharetrip_url}}/api/trip/create",
+            "body": {
+              "raw": "{\r\n  \"available_seats\": 3,\r\n  \"from_point\": \"Москва\",\r\n  \"to_point\": \"Тверь\",\r\n  \"departure_time\": \"{{departure_time}}\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "{{refresh_token}}",
+                "key": "X-Refresh-Token"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Create trip",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "  if (body.data && body.data.id && (!body.errors || body.errors.length === 0)) pm.collectionVariables.set('trip_id', body.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Publish trip",
+          "request": {
+            "url": "{{sharetrip_url}}/api/trip/publish",
+            "body": {
+              "raw": "{\r\n  \"trip_id\": \"{{trip_id}}\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "{{refresh_token}}",
+                "key": "X-Refresh-Token"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Publish trip",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Get trip",
+          "request": {
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "{{refresh_token}}",
+                "key": "X-Refresh-Token"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Get trip",
+            "method": "GET",
+            "url": "{{sharetrip_url}}/api/trip/{{trip_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Notifications",
+      "item": [
+        {
+          "response": [],
+          "name": "Create notification",
+          "request": {
+            "url": "{{notification_url}}/api/notification/",
+            "body": {
+              "raw": "{\r\n  \"type\": \"trip_published\",\r\n  \"payload\": {\r\n    \"company_id\": \"{{company_id}}\",\r\n    \"occurred_at\": \"{{$isoTimestamp}}\",\r\n    \"trip_id\": \"{{trip_id}}\"\r\n  },\r\n  \"recipient_id\": \"{{recipient_id}}\"\r\n}",
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              },
+              {
+                "value": "application/json",
+                "key": "Content-Type"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Create notification",
+            "method": "POST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('No application errors', () => pm.expect(body.errors).to.eql([]));",
+                  "  if (body.data && body.data.id && (!body.errors || body.errors.length === 0)) pm.collectionVariables.set('notification_id', body.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Get notification",
+          "request": {
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Get notification",
+            "method": "GET",
+            "url": "{{notification_url}}/api/notification/{{notification_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 Diagnostics",
+      "item": [
+        {
+          "response": [],
+          "name": "sharetrip metrics",
+          "request": {
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "sharetrip metrics",
+            "method": "GET",
+            "url": "{{sharetrip_url}}/metrics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "contract metrics",
+          "request": {
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "contract metrics",
+            "method": "GET",
+            "url": "{{contract_url}}/metrics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "notification metrics",
+          "request": {
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "notification metrics",
+            "method": "GET",
+            "url": "{{notification_url}}/metrics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "response": [],
+          "name": "Contract OpenAPI",
+          "request": {
+            "header": [
+              {
+                "value": "{{$guid}}",
+                "key": "X-Request-ID"
+              },
+              {
+                "value": "{{correlation_id}}",
+                "key": "X-Correlation-ID"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Contract OpenAPI",
+            "method": "GET",
+            "url": "{{contract_url}}/api/contract.yaml"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Expected HTTP status', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "if (!pm.collectionVariables.get('correlation_id')) pm.collectionVariables.set('correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+          "if (!pm.collectionVariables.get('starts_at')) pm.collectionVariables.set('starts_at', new Date(Date.now() - 60000).toISOString());",
+          "if (!pm.collectionVariables.get('departure_time')) pm.collectionVariables.set('departure_time', new Date(Date.now() + 7 * 86400000).toISOString());"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  }
+}

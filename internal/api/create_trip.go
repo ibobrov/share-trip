@@ -50,10 +50,10 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		return fmt.Errorf("when parse clientID: %w", err)
 	}
 
+	ctx = logctx.WithBusinessIDs(ctx, "", sub)
 	logger := logctx.Logger(ctx).With(
-		slog.String("server", "TripServer"),
-		slog.String("handler", "CreateTrip"),
-		slog.String("client_id", sub),
+		slog.String("component", "TripServer"),
+		slog.String("operation", "CreateTrip"),
 	)
 
 	var req CreateTripRequest
@@ -61,7 +61,7 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	if !ok {
 		return err
 	}
-	logger.Info("create trip request accepted")
+	logger.Debug("create trip request accepted")
 
 	departureTime, err := time.Parse(time.RFC3339, req.DepartureTime)
 	if err != nil {
@@ -77,14 +77,10 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		AvailableSeats: req.AvailableSeats,
 	})
 	if err != nil {
-		return HandleError(c, func() {
-			logger.Error(
-				"create trip failed",
-				slog.Any("error", err),
-			)
-		}, err)
+		return HandleError(c, logger, err)
 	}
 
+	logger.Info("request completed", "result", "success", "trip_id", res.ID)
 	return Success(c, CreateTripResponse{
 		ID:             res.ID,
 		ClientID:       res.ClientID,

@@ -27,7 +27,7 @@ func NewHTTPMetricsMiddleware(m *metrics.Metrics) fiber.Handler {
 			status := strconv.Itoa(statusCode)
 			path := c.Route().Path
 			if path == "" {
-				path = c.Path()
+				path = "unmatched"
 			}
 
 			m.HTTPRequestTotal.WithLabelValues(c.Method(), path, status).Inc()

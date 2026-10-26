@@ -177,6 +177,7 @@ func TestTripService_PublishTrip_AfterContractAllowed(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, trip.ID, response.TripID)
+			require.Equal(t, eventID, response.EventID)
 		})
 	}
 }

@@ -54,7 +54,7 @@ func run() error {
 	ctx := context.Background()
 
 	tp, err := tracing.NewProvider(ctx, tracing.Config{
-		ServiceName:    "share-trip",
+		ServiceName:    "sharetrip",
 		ServiceVersion: "1.0.0",
 		Environment:    cfg.AppEnv,
 		Endpoint:       cfg.OTLPEndpoint,
@@ -95,7 +95,7 @@ func run() error {
 			AttemptTimeout: cfg.ContractRequestTimeout, CheckTimeout: cfg.ContractCheckTimeout,
 			RetryAttempts: cfg.RetryAttempts, RetryDelay: cfg.RetryDelay,
 		},
-	)
+		tripMetrics)
 	if err != nil {
 		return fmt.Errorf("create contract client: %w", err)
 	}
@@ -134,7 +134,7 @@ func run() error {
 
 	publisher := service.NewOutboxPublisher(pool, outboxRepo, producer, logger, service.OutboxConfig{
 		PollInterval: cfg.OutboxPollInterval, BatchTimeout: cfg.OutboxBatchTimeout, BatchSize: cfg.OutboxBatchSize, MaxAttempts: cfg.OutboxMaxAttempts,
-	})
+	}, tripMetrics)
 	publisherCtx, stopPublisher := context.WithCancel(shutdown)
 	publisherDone := make(chan error, 1)
 	go func() { publisherDone <- publisher.Run(publisherCtx) }()

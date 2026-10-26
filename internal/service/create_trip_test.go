@@ -46,13 +46,13 @@ func TestTripService_CreateTrip_Allowed(t *testing.T) {
 	}
 
 	gomock.InOrder(
-		contracts.EXPECT().CheckOption(ctx, request.CompanyID, "trip_creation").
+		contracts.EXPECT().CheckOption(gomock.Any(), request.CompanyID, "trip_creation").
 			Return(service.CheckResult{Allowed: true}, nil).Times(1),
-		pool.EXPECT().Begin(ctx).Return(transaction, nil).Times(1),
-		useCase.EXPECT().CreateTrip(ctx, transaction, domainRequest).Return(created, nil).Times(1),
-		transaction.EXPECT().Commit(ctx).Return(nil).Times(1),
+		pool.EXPECT().Begin(gomock.Any()).Return(transaction, nil).Times(1),
+		useCase.EXPECT().CreateTrip(gomock.Any(), transaction, domainRequest).Return(created, nil).Times(1),
+		transaction.EXPECT().Commit(gomock.Any()).Return(nil).Times(1),
 		// tx always calls Rollback on exit; after COMMIT pgx returns ErrTxClosed.
-		transaction.EXPECT().Rollback(ctx).Return(pgx.ErrTxClosed).Times(1),
+		transaction.EXPECT().Rollback(gomock.Any()).Return(pgx.ErrTxClosed).Times(1),
 	)
 
 	response, err := svc.CreateTrip(ctx, request)
@@ -74,7 +74,7 @@ func TestTripService_CreateTrip_Denied(t *testing.T) {
 	useCase := mocks.NewMockTripUseCase(ctrl)
 	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 
-	contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
+	contracts.EXPECT().CheckOption(gomock.Any(), "company-acme", "trip_creation").
 		Return(service.CheckResult{Allowed: false, Reason: "CONTRACT_EXPIRED"}, nil).Times(1)
 	pool.EXPECT().Begin(gomock.Any()).Times(0)
 	useCase.EXPECT().CreateTrip(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
@@ -105,7 +105,7 @@ func TestTripService_CreateTrip_ContractError(t *testing.T) {
 			useCase := mocks.NewMockTripUseCase(ctrl)
 			svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 
-			contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
+			contracts.EXPECT().CheckOption(gomock.Any(), "company-acme", "trip_creation").
 				Return(service.CheckResult{}, tt.err).Times(1)
 			pool.EXPECT().Begin(gomock.Any()).Times(0)
 			useCase.EXPECT().CreateTrip(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
@@ -128,9 +128,9 @@ func TestTripService_CreateTrip_BeginFailed(t *testing.T) {
 	beginError := errors.New("begin failed")
 
 	gomock.InOrder(
-		contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
+		contracts.EXPECT().CheckOption(gomock.Any(), "company-acme", "trip_creation").
 			Return(service.CheckResult{Allowed: true}, nil).Times(1),
-		pool.EXPECT().Begin(ctx).Return(nil, beginError).Times(1),
+		pool.EXPECT().Begin(gomock.Any()).Return(nil, beginError).Times(1),
 	)
 	useCase.EXPECT().CreateTrip(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
@@ -150,12 +150,12 @@ func TestTripService_CreateTrip_DomainError(t *testing.T) {
 	svc := service.NewTripService(pool, useCase, metrics.New(prometheus.NewRegistry()), contracts)
 
 	gomock.InOrder(
-		contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
+		contracts.EXPECT().CheckOption(gomock.Any(), "company-acme", "trip_creation").
 			Return(service.CheckResult{Allowed: true}, nil).Times(1),
-		pool.EXPECT().Begin(ctx).Return(transaction, nil).Times(1),
-		useCase.EXPECT().CreateTrip(ctx, transaction, domain.CreateTripRequest{CompanyID: "company-acme"}).
+		pool.EXPECT().Begin(gomock.Any()).Return(transaction, nil).Times(1),
+		useCase.EXPECT().CreateTrip(gomock.Any(), transaction, domain.CreateTripRequest{CompanyID: "company-acme"}).
 			Return(nil, domain.ErrDomain).Times(1),
-		transaction.EXPECT().Rollback(ctx).Return(nil).Times(1),
+		transaction.EXPECT().Rollback(gomock.Any()).Return(nil).Times(1),
 	)
 	transaction.EXPECT().Commit(gomock.Any()).Times(0)
 
@@ -176,13 +176,13 @@ func TestTripService_CreateTrip_CommitFailed(t *testing.T) {
 	commitError := errors.New("commit failed")
 
 	gomock.InOrder(
-		contracts.EXPECT().CheckOption(ctx, "company-acme", "trip_creation").
+		contracts.EXPECT().CheckOption(gomock.Any(), "company-acme", "trip_creation").
 			Return(service.CheckResult{Allowed: true}, nil).Times(1),
-		pool.EXPECT().Begin(ctx).Return(transaction, nil).Times(1),
-		useCase.EXPECT().CreateTrip(ctx, transaction, domain.CreateTripRequest{CompanyID: "company-acme"}).
+		pool.EXPECT().Begin(gomock.Any()).Return(transaction, nil).Times(1),
+		useCase.EXPECT().CreateTrip(gomock.Any(), transaction, domain.CreateTripRequest{CompanyID: "company-acme"}).
 			Return(&domain.CreateTripResponse{ID: uuid.New()}, nil).Times(1),
-		transaction.EXPECT().Commit(ctx).Return(commitError).Times(1),
-		transaction.EXPECT().Rollback(ctx).Return(pgx.ErrTxClosed).Times(1),
+		transaction.EXPECT().Commit(gomock.Any()).Return(commitError).Times(1),
+		transaction.EXPECT().Rollback(gomock.Any()).Return(pgx.ErrTxClosed).Times(1),
 	)
 
 	response, err := svc.CreateTrip(ctx, service.CreateTripRequest{CompanyID: "company-acme"})

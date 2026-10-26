@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"log/slog"
+	"sort"
 
 	"github.com/asaskevich/govalidator/v12"
 	"github.com/gofiber/fiber/v2"
@@ -32,14 +33,18 @@ func NewServer(
 func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx, logger *slog.Logger) (ok bool, err error) {
 	if err := c.BodyParser(request); err != nil {
 		logger.Warn(
-			"create request failed: invalid json body",
-			slog.Any("error", err),
-			slog.String("layer", "validation"),
+			"invalid request body",
+			slog.String("reason", "invalid_json"), slog.String("result", "validation_error"),
 		)
 		return false, Failure(c, "некорректное тело запроса")
 	}
 
 	if _, err := govalidator.ValidateStruct(*request); err != nil {
+		fields := make([]string, 0)
+		for field := range govalidator.ErrorsByField(err) {
+			fields = append(fields, field)
+		}
+		sort.Strings(fields)
 		validationErrors := make([]string, 0)
 
 		for field, message := range govalidator.ErrorsByField(err) {
@@ -54,9 +59,8 @@ func ParseAndValidateRequest[T interface{}](request *T, c *fiber.Ctx, logger *sl
 		}
 
 		logger.Warn(
-			"create request failed:",
-			slog.Any("error", validationErrors),
-			slog.String("layer", "validation"),
+			"request validation failed",
+			slog.Any("fields", fields), slog.String("result", "validation_error"),
 		)
 
 		return false, Failure(c, validationErrors...)

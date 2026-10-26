@@ -82,13 +82,15 @@ func (s *stack) secrets() error {
 
 func (s *stack) configs() error {
 	for name, files := range map[string]map[string]string{
-		"loki-config":         {"config.yaml": "deploy/loki/config.yaml"},
-		"otel-config":         {"config.yaml": "deploy/otel-collector/config.yaml"},
-		"alloy-config":        {"config.alloy": "k8s/config/config.alloy"},
-		"prometheus-config":   {"prometheus.yml": "k8s/config/prometheus.yml"},
-		"grafana-datasources": {"local.yaml": "k8s/config/datasources.yaml"},
-		"exporter-init":       {"init.sql": "deploy/postgres/init-exporter.sql", "init.sh": "k8s/config/init-exporter.sh"},
-		"keycloak-realm":      {"sharetrip-realm.json": "k8s/config/sharetrip-realm.json"},
+		"loki-config":                {"config.yaml": "deploy/loki/config.yaml"},
+		"otel-config":                {"config.yaml": "deploy/otel-collector/config.yaml"},
+		"alloy-config":               {"config.alloy": "k8s/config/config.alloy"},
+		"prometheus-config":          {"prometheus.yml": "k8s/config/prometheus.yml"},
+		"grafana-datasources":        {"local.yaml": "k8s/config/datasources.yaml"},
+		"grafana-dashboard-provider": {"dashboards.yaml": "k8s/config/dashboards.yaml"},
+		"trip-publication-dashboard": {"trip-publication.json": "k8s/config/trip-publication.json"},
+		"exporter-init":              {"init.sql": "deploy/postgres/init-exporter.sql", "init.sh": "k8s/config/init-exporter.sh"},
+		"keycloak-realm":             {"sharetrip-realm.json": "k8s/config/sharetrip-realm.json"},
 	} {
 		for key, path := range files {
 			files[key] = filepath.Join(s.root, path)

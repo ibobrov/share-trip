@@ -3,7 +3,10 @@ package api_test
 import (
 	"context"
 	"database/sql"
+	"github.com/ibobrov/share_trip/internal/observability/middleware"
+	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"testing"
@@ -86,7 +89,7 @@ func TestMain(m *testing.M) {
 	outboxRepo := repository.NewOutboxRepository()
 	tripUseCase := domain.NewTripUseCase(tripRepo, tripHistoryRepo, outboxRepo)
 	contractServer := newContractTestServer()
-	contractClient, err := contract.NewClient(contractServer.URL, &http.Client{Timeout: time.Second}, contract.DefaultClientConfig())
+	contractClient, err := contract.NewClient(contractServer.URL, &http.Client{Timeout: time.Second}, contract.DefaultClientConfig(), nil)
 	if err != nil {
 		log.Fatalf("create contract client: %v", err)
 	}
@@ -94,6 +97,7 @@ func TestMain(m *testing.M) {
 	server := api.NewServer(testPool, tripService, registry)
 
 	testApp = fiber.New()
+	testApp.Use(middleware.Correlation(slog.New(slog.NewJSONHandler(io.Discard, nil))))
 	testApp.Use(testAuthMiddleware)
 	server.Route(testApp.Group(""), testKeycloakClientID, 2*time.Second)
 

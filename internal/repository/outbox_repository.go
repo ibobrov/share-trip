@@ -16,6 +16,12 @@ func NewOutboxRepository() *OutboxRepository {
 	return &OutboxRepository{}
 }
 
+func (r *OutboxRepository) CountPending(ctx context.Context, tx pgx.Tx) (int, error) {
+	var count int
+	err := tx.QueryRow(ctx, "SELECT count(*) FROM outbox_event WHERE status = 'pending'").Scan(&count)
+	return count, err
+}
+
 func (r *OutboxRepository) Create(
 	ctx context.Context,
 	tx pgx.Tx,

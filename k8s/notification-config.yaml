@@ -11,3 +11,5 @@ data:
   KAFKA_TRIP_TOPIC: "trip.events"
   KAFKA_GROUP_ID: "notification-service"
   HANDLE_TIMEOUT_MS: "10000"
+  APP_ENV: "local"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4318"

@@ -4,13 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/segmentio/kafka-go"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/service"
-	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type recordingWriter struct {
@@ -34,6 +36,7 @@ func TestProducer_PublishTripPublished(t *testing.T) {
 	writer := &recordingWriter{}
 	producer := &Producer{writer: writer, timeout: time.Second}
 	event := service.TripPublishedEvent{
+		RequestID: "request-123", CorrelationID: "publication-456", CausationID: "request-123", Traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 		EventID: uuid.New(), TripID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-acme",
 		OccurredAt: time.Date(2026, 10, 22, 15, 0, 0, 0, time.FixedZone("MSK", 3*60*60)),
 	}
@@ -42,6 +45,16 @@ func TestProducer_PublishTripPublished(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, writer.messages, 1)
 	message := writer.messages[0]
+	headers := propagation.MapCarrier{}
+	for _, header := range message.Headers {
+		headers.Set(header.Key, string(header.Value))
+	}
+	require.Equal(t, event.EventID.String(), headers.Get("event_id"))
+	require.Equal(t, "TripPublished", headers.Get("event_type"))
+	require.Equal(t, event.CorrelationID, headers.Get("correlation_id"))
+	require.Equal(t, event.CausationID, headers.Get("causation_id"))
+	remote := propagation.TraceContext{}.Extract(t.Context(), headers)
+	require.Equal(t, "4bf92f3577b34da6a3ce929d0e0e4736", trace.SpanContextFromContext(remote).TraceID().String())
 	require.Equal(t, event.TripID.String(), string(message.Key))
 	var body TripPublished
 	require.NoError(t, json.Unmarshal(message.Value, &body))

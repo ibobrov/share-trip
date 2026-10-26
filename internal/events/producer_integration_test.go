@@ -3,6 +3,7 @@ package events_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/segmentio/kafka-go"
 	"os"
 	"strings"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/events"
 	"github.com/ibobrov/share_trip/internal/service"
-	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,6 +40,7 @@ func TestProducer_Kafka(t *testing.T) {
 	event := service.TripPublishedEvent{
 		EventID: uuid.New(), TripID: uuid.New(), ClientID: uuid.New(), CompanyID: "company-acme",
 		OccurredAt: time.Now().UTC().Truncate(time.Millisecond),
+		RequestID:  "request-123", CorrelationID: "publication-456", CausationID: "request-123", Traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 	}
 	require.NoError(t, producer.PublishTripPublished(ctx, event))
 	partition := (&kafka.Hash{}).Balance(kafka.Message{Key: []byte(event.TripID.String())}, 0, 1, 2)
@@ -55,5 +56,13 @@ func TestProducer_Kafka(t *testing.T) {
 	require.Equal(t, event.TripID, received.TripID)
 	require.Equal(t, event.ClientID, received.ClientID)
 	require.Equal(t, event.CompanyID, received.CompanyID)
+	headers := map[string]string{}
+	for _, header := range message.Headers {
+		headers[header.Key] = string(header.Value)
+	}
+	require.Equal(t, event.EventID.String(), headers["event_id"])
+	require.Equal(t, event.CorrelationID, headers["correlation_id"])
+	require.Equal(t, event.CausationID, headers["causation_id"])
+	require.NotEmpty(t, headers["traceparent"])
 	require.True(t, event.OccurredAt.Equal(received.OccurredAt))
 }

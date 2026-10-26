@@ -36,15 +36,24 @@ Hash-балансировщик направляет события с один�
   "trip_id": "f9b711e3-8f45-4dc3-8cab-07623f5de6e5",
   "client_id": "a1b2c3d4-1111-4111-8111-123456789abc",
   "company_id": "company-acme",
-  "occurred_at": "2026-10-22T20:00:00Z"
+  "occurred_at": "2026-10-22T20:00:00Z",
+  "request_id": "request-123",
+  "correlation_id": "publication-456",
+  "causation_id": "request-123",
+  "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 
 Идентификатор события совпадает с `outbox_event.id`. Компания и клиент берутся
 из записи, прочитанной под блокировкой. Время события в UTC соответствует времени
 перехода статуса и записи истории. В outbox сохраняются trip_id, client_id и company_id;
-время и идентификатор находятся в отдельных столбцах. Внутреннее имя события outbox
+request_id, correlation_id, causation_id и исходный trace context также сохраняются в JSON payload;
+время и идентификатор события находятся в отдельных столбцах. Внутреннее имя события outbox
 остаётся `trip_published`, внешнее значение `event_type` — `TripPublished`.
+
+Metadata передаётся также в Kafka headers. Consumer создаёт новую trace со span link
+на контекст отправителя. Метрики, dashboard и правила поиска связанного процесса:
+[observability.md](observability.md).
 
 ## Настройки и запуск
 

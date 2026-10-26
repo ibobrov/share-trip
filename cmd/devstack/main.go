@@ -190,6 +190,12 @@ func (s *stack) up() error {
 		}
 	}
 	for _, name := range []string{"kafka", "keycloak", "grafana", "loki", "prometheus"} {
+		if name == "grafana" || name == "prometheus" {
+			// These services mount ConfigMap files through subPath; restart to reread them.
+			if err := s.kube("-n", namespace, "rollout", "restart", "statefulset/"+name); err != nil {
+				return err
+			}
+		}
 		if err := s.wait("statefulset", name); err != nil {
 			return err
 		}
@@ -197,7 +203,7 @@ func (s *stack) up() error {
 	if err := s.kafkaTopicJob(); err != nil {
 		return err
 	}
-	for _, name := range []string{"kafka-ui", "jaeger", "otel-collector", "alloy", "postgres-exporter-sharetrip", "postgres-exporter-contract", "postgres-exporter-notification"} {
+	for _, name := range []string{"kafka-ui", "kafka-exporter", "jaeger", "otel-collector", "alloy", "postgres-exporter-sharetrip", "postgres-exporter-contract", "postgres-exporter-notification"} {
 		if err := s.wait("deployment", name); err != nil {
 			return err
 		}

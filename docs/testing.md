@@ -102,3 +102,21 @@ HTTP-клиента Docker не требуется.
 PostgreSQL тестов создаётся Testcontainers отдельно от БД стенда; Docker Compose и Kubernetes
 для этих тестов не требуются. Kafka-тесты с `KAFKA_TEST_BROKERS` используют отдельно доступный
 брокер, как описано в [kafka-producer.md](kafka-producer.md).
+
+## Наблюдаемость процесса
+
+- `internal/observability/middleware/correlation_test.go`: идентификаторы не меняются после завершения
+  и повторного использования HTTP-запросов Fiber.
+- `internal/clients/contract/observability_test.go`: request/correlation/business IDs и trace context
+  сохраняются при retry HTTP 500; метрика клиента считает одну логическую проверку.
+- `internal/api_test/observability_test.go`: metadata HTTP-команды сохраняется в outbox.
+- `internal/api_test/outbox_publisher_test.go`: retry сохраняет event metadata, backlog и counters
+  отражают отказ и восстановление; каждый тест использует свою схему PostgreSQL.
+- Producer-тесты проверяют metadata Kafka headers, в том числе на настоящем Kafka при KAFKA_TEST_BROKERS.
+- В share-trip-notification `internal/events/observability_test.go` проверяет новую trace со span link,
+  metadata в контексте/логах и ошибку commit offset без успешного consume.
+- Там же `internal/api_test/observability_test.go` проверяет метрики по фактическому COMMIT,
+  дубликат inbox и откат без второго уведомления; Kafka-тест проверяет обработку headers через брокер.
+
+Тестовые tracer providers используют собственные recorder и не меняют глобальный provider
+параллельных тестов. Инструкция ручной проверки и dashboard: [observability.md](observability.md).

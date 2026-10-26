@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/segmentio/kafka-go"
 	"log/slog"
 	"os"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/ibobrov/share_trip/internal/events"
 	"github.com/ibobrov/share_trip/internal/repository"
 	"github.com/ibobrov/share_trip/internal/service"
-	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +41,7 @@ func TestOutboxPublisher_KafkaAndPostgres(t *testing.T) {
 
 	// A refused connection must leave a persisted event for the next worker.
 	unavailableProducer := events.NewProducer([]string{"127.0.0.1:1"}, topic, events.DefaultProducerConfig())
-	publisher := service.NewOutboxPublisher(pool, outbox, unavailableProducer, slog.Default(), service.DefaultOutboxConfig())
+	publisher := service.NewOutboxPublisher(pool, outbox, unavailableProducer, slog.Default(), service.DefaultOutboxConfig(), nil)
 	result, err := publisher.PublishPending(ctx, service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Failed: 1}, result)
@@ -50,7 +50,7 @@ func TestOutboxPublisher_KafkaAndPostgres(t *testing.T) {
 
 	producer := events.NewProducer(brokers, topic, events.DefaultProducerConfig())
 	defer func() { require.NoError(t, producer.Close()) }()
-	publisher = service.NewOutboxPublisher(pool, outbox, producer, slog.Default(), service.DefaultOutboxConfig())
+	publisher = service.NewOutboxPublisher(pool, outbox, producer, slog.Default(), service.DefaultOutboxConfig(), nil)
 	result, err = publisher.PublishPending(ctx, service.PublishPendingRequest{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, service.PublishPendingResponse{Sent: 1}, result)

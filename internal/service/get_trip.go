@@ -3,14 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/ibobrov/share_trip/internal/domain"
-	"github.com/ibobrov/share_trip/internal/observability/logctx"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type GetTripRequest struct {
@@ -32,15 +31,15 @@ type GetTripResponse struct {
 func (s *TripService) GetTripByIdRequest(
 	ctx context.Context,
 	req GetTripRequest,
-) (GetTripResponse, error) {
-	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.GetTrip")
+) (response GetTripResponse, err error) {
+	ctx, span := otel.Tracer("sharetrip").Start(ctx, "TripService.GetTrip")
 	defer span.End()
-
-	logger := logctx.Logger(ctx).With(
-		slog.String("service", "TripService"),
-		slog.String("operation", "GetTrip"),
-		slog.String("layer", "service"),
-	)
+	defer func() {
+		if metricResult(err) == "internal_error" {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "operation failed")
+		}
+	}()
 
 	result, err := tx(
 		ctx,
@@ -49,12 +48,6 @@ func (s *TripService) GetTripByIdRequest(
 			res, err := s.tripUseCase.GetTrip(ctx, tx, domain.GetTripRequest{TripID: req.TripID})
 
 			if err != nil {
-
-				logger.Error(
-					"get trip usecase failed",
-					slog.String("layer", "transaction"),
-					slog.Any("error", err),
-				)
 				return nil, fmt.Errorf("usecase.GetTrip: %w", err)
 			}
 
