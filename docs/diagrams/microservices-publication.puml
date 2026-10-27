@@ -1,0 +1,107 @@
+@startuml
+title Публикация поездки - HTTP, outbox, Kafka и inbox
+hide footbox
+autonumber
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+actor Клиент as user
+participant "ShareTrip API / service" as trip
+database "ShareTrip PostgreSQL" as tripDB
+participant Contract as contract
+database "Contract PostgreSQL" as contractDB
+participant "Outbox publisher\nв процессе ShareTrip" as publisher
+queue "Kafka\ntrip.events" as kafka
+participant "Notification consumer\ngroup notification-service" as consumer
+database "Notification PostgreSQL" as notificationDB
+
+user -> trip: POST /api/trip/publish {trip_id}\nX-Refresh-Token, X-Request-ID, X-Correlation-ID
+note over trip
+  Обмен токена через Keycloak и проверка роли выполняются до service.
+  request_id создаётся при отсутствии; correlation_id по умолчанию = request_id.
+end note
+trip -> tripDB: Прочитать поездку без блокировки
+tripDB --> trip: client_id, company_id, status
+break Поездка не найдена / чужая / уже опубликована
+  trip --> user: 404 / 403 / 200 соответственно\nНовое событие не создаётся
+end
+trip -> contract: POST /api/option/check\ncompany_id, option_code=trip_publication\nrequest_id, correlation_id, traceparent, X-Trip-ID, X-User-ID
+contract -> contractDB: Найти действующий договор и услугу
+contractDB --> contract: Договор и опции / отсутствие договора
+alt Проверка выполнена
+  contract --> trip: 200 {data: {allowed, reason}, errors: []}
+  break allowed=false
+    trip --> user: 403; поездка не изменена
+  end
+else HTTP 500 / timeout / сетевая ошибка
+  note over trip, contract: 500 мс / попытка; максимум 2 попытки только для HTTP 500; общий бюджет 1,2 с
+  break Проверить услугу не удалось
+    trip --> user: 500; поездка не изменена
+  end
+end
+
+group Одна локальная транзакция ShareTrip
+  trip -> tripDB: BEGIN; SELECT ... FOR UPDATE
+  trip -> trip: Повторно проверить владельца и статус draft
+  break Состояние изменилось или ошибка БД
+    trip -> tripDB: ROLLBACK
+    trip --> user: 200 для уже published / 403 / 409 / 500 по причине
+  end
+  trip -> tripDB: UPDATE trips -> published; INSERT trip_history
+  trip -> tripDB: INSERT outbox_event\nid=event_id, event_name=trip_published\npayload + request_id/correlation_id/causation_id/traceparent
+  trip -> tripDB: COMMIT
+  break Ошибка COMMIT
+    trip --> user: 500; успешная публикация не подтверждается
+  end
+end
+trip -> trip: INFO PublishTrip: success, trip_id, event_id\nТолько после успешного COMMIT
+trip --> user: 201 {data: {trip_id}, errors: []}
+note over trip, publisher: API не ждёт Kafka или Notification; worker независим от HTTP-ответа
+
+publisher -> tripDB: BEGIN; SELECT pending FOR UPDATE SKIP LOCKED
+tripDB --> publisher: Сохранённое событие и metadata
+publisher -> kafka: TripPublished; key=trip_id\nheaders: event_id, event_type, request_id,\ncorrelation_id, causation_id, traceparent, tracestate
+alt Kafka ACK
+  kafka --> publisher: ACK
+  publisher -> tripDB: UPDATE status=sent, attempts++, sent_at; COMMIT
+else Ошибка отправки
+  publisher -> tripDB: attempts++, last_error; COMMIT\npending / failed после 10 неудачных попыток
+end
+note over publisher, kafka
+  ACK и COMMIT sent не атомарны: повтор возможен с прежним event_id.
+  Backlog измеряется отдельно; ошибка подсчёта не откатывает отправку.
+end note
+
+opt Сообщение появилось в Kafka, в том числе после повтора
+  kafka -> consumer: Сообщение + headers + partition/offset
+  consumer -> consumer: Извлечь metadata; проверить сообщение\nНовая trace со span link на Kafka context
+  group Одна локальная транзакция Notification
+    consumer -> notificationDB: BEGIN; INSERT processed_events(event_id)\nON CONFLICT DO NOTHING
+    alt Новый event_id
+      consumer -> notificationDB: INSERT notifications, status=created
+    else Дубликат
+      consumer -> consumer: Не создавать второе уведомление
+    end
+    alt Успех БД
+      consumer -> notificationDB: COMMIT
+    else Ошибка БД
+      consumer -> notificationDB: ROLLBACK
+    end
+  end
+  alt COMMIT БД успешен
+    consumer -> kafka: Commit offset
+    alt Offset подтверждён
+      consumer -> consumer: INFO ConsumeTripPublished: success / duplicate
+    else Ошибка commit offset
+      consumer -> consumer: ERROR; приложение завершается\nПри повторе inbox отсечёт дубль
+    end
+  else Транзакция не зафиксирована
+    consumer -> consumer: ERROR; offset не подтверждён\nПриложение завершается, Kubernetes перезапускает контейнер
+  end
+end
+note over consumer, notificationDB
+  created = сохранено в БД. Внешнего SMS/email-провайдера нет.
+  Невалидное известное событие: лог с metadata, остановка без commit offset.
+end note
+@enduml

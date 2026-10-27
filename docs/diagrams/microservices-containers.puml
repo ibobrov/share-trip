@@ -1,0 +1,72 @@
+@startuml
+!include <C4/C4_Container>
+title ShareTrip - C4 Container, текущая реализация
+LAYOUT_TOP_DOWN()
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+Person(client, "Клиент", "Публикует собственную поездку")
+Person(operator, "Разработчик / оператор", "Расследует состояние процесса")
+
+System_Boundary(platform, "ShareTrip - локальный Kubernetes, namespace sharetrip") {
+  Boundary(core, "Бизнес-процесс") {
+    Container(keycloak, "Keycloak", "OIDC / OAuth2", "Идентификация, роли, company_id; собственное хранилище")
+    Container(trip, "ShareTrip", "Go / Fiber; Deployment sharetrip", "HTTP API + outbox publisher в одном процессе")
+    Container(contract, "Contract", "Go / Fiber; Deployment contract", "Договоры и услуги компании")
+    Container(notification, "Notification", "Go / Fiber / kafka-go; Deployment notification", "HTTP API + consumer в одном процессе")
+    ContainerDb(tripDB, "ShareTrip PostgreSQL", "StatefulSet + PVC", "trips, trip_history, outbox_event")
+    ContainerDb(contractDB, "Contract PostgreSQL", "StatefulSet + PVC", "Договоры и опции")
+    ContainerDb(notificationDB, "Notification PostgreSQL", "StatefulSet + PVC", "processed_events (inbox), notifications")
+    ContainerQueue(kafka, "Kafka", "StatefulSet + PVC", "Topic trip.events; group notification-service")
+    Container(kafkaUI, "Kafka UI", "Web UI", "Сообщения, headers, consumer groups и lag")
+  }
+
+    Boundary(obs, "Наблюдаемость") {
+        Container(collector, "OpenTelemetry Collector", "OTLP HTTP / gRPC", "Принимает traces приложений")
+        Container(jaeger, "Jaeger", "Trace backend / UI", "Traces и span links")
+        Container(alloy, "Alloy", "Kubernetes log collection", "Собирает stdout Pod-ов через Kubernetes API")
+        Container(loki, "Loki", "Log backend", "Структурные логи")
+        Container(prometheus, "Prometheus", "Metrics backend", "Scrape каждые 10 секунд")
+        Container(exporters, "Exporters", "3 PostgreSQL exporters + Kafka Exporter", "Отдельные workloads; метрики БД и consumer lag")
+        Container(grafana, "Grafana", "Dashboard / Explore", "Trip publication и поиск логов")
+    }
+}
+
+Rel(client, trip, "Публикация; X-Refresh-Token", "HTTP / JSON")
+Rel(trip, keycloak, "Обменивает refresh token на access token", "HTTP / OIDC")
+Rel(trip, contract, "Проверяет trip_publication компании", "HTTP POST /api/option/check")
+Rel(trip, tripDB, "Свои данные; поездка + outbox атомарно", "SQL")
+Rel(contract, contractDB, "Свои договоры и услуги", "SQL")
+Rel(trip, kafka, "Publisher: TripPublished", "Kafka; key=trip_id")
+Rel(notification, kafka, "Читает и подтверждает offsets", "Kafka; group=notification-service")
+Rel(notification, notificationDB, "Inbox + уведомление атомарно", "SQL")
+Rel(kafkaUI, kafka, "Состояние брокера", "Kafka API")
+
+Rel_D(trip, collector, "Traces", "OTLP")
+Rel_D(contract, collector, "Traces", "OTLP")
+Rel_D(notification, collector, "Traces", "OTLP")
+Rel(collector, jaeger, "Экспорт traces", "OTLP")
+Rel(alloy, loki, "Логи трёх сервисов из stdout Pod-ов", "HTTP")
+Rel_U(prometheus, trip, "Scrape", "HTTP /metrics")
+Rel_U(prometheus, contract, "Scrape", "HTTP /metrics")
+Rel_U(prometheus, notification, "Scrape", "HTTP /metrics")
+Rel(prometheus, exporters, "Scrape инфраструктуры", "HTTP /metrics")
+Rel(grafana, prometheus, "Метрики процесса", "PromQL")
+Rel(grafana, loki, "Поиск логов", "LogQL")
+Rel(operator, grafana, "Dashboard / Explore", "HTTP")
+Rel(operator, jaeger, "Traces и links", "HTTP")
+Rel(operator, kafkaUI, "Сообщения и lag", "HTTP")
+
+Lay_R(trip, contract)
+Lay_R(contract, notification)
+Lay_L(trip, keycloak)
+Lay_D(trip, tripDB)
+Lay_D(contract, contractDB)
+Lay_D(notification, notificationDB)
+Lay_D(tripDB, collector)
+Lay_R(collector, jaeger)
+Lay_R(alloy, loki)
+Lay_R(prometheus, exporters)
+
+SHOW_LEGEND()
+@enduml
